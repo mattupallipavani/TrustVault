@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class FileValidationServiceTest {
 
-    private final FileValidationService service = new FileValidationService();
+    private final FileValidationService service = new FileValidationService(new DefaultMalwareScanner());
 
     @Test
     void acceptsPlainTextAndReturnsContentHash() throws Exception {

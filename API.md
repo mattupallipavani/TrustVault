@@ -45,7 +45,8 @@ Every endpoint below states who is allowed to call it and what authorization che
 | Method | Path | Access | Description |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/auth/logout` | Authenticated | Server-side session invalidation and cookie clearing. Requires CSRF. |
-| `GET` | `/api/users/me` | Authenticated | Returns current user details: `id`, `fullName`, `email`, `role`. |
+| `GET` | `/api/users/me` | Authenticated | Returns current user details: `id`, `fullName`, `email`, `role`, `mustChangePassword`. |
+| `POST` | `/api/users/me/change-password` | Authenticated | Body `{ currentPassword, newPassword }`. Self-service password change; clears `mustChangePassword`. Audited. |
 | `GET` | `/api/users/lookup?email=` | Authenticated | Exact email lookup. Returns `UserResponse` or `404`. |
 
 ### 3. Document Management

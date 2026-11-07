@@ -29,6 +29,9 @@ public class User {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean mustChangePassword;
+
     public User() {
     }
 
@@ -80,4 +83,13 @@ public class User {
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
+
+    public boolean isMustChangePassword() {
+        return mustChangePassword;
+    }
+
+    public void setMustChangePassword(boolean mustChangePassword) {
+        this.mustChangePassword = mustChangePassword;
+    }
+
 }

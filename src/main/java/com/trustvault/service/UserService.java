@@ -9,7 +9,6 @@ import com.trustvault.exception.ConflictException;
 import com.trustvault.exception.ResourceNotFoundException;
 import com.trustvault.repository.UserRepository;
 import com.trustvault.util.AuditEvent;
-
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -112,7 +111,7 @@ public class UserService {
         }
 
         String temporaryPassword = generateTemporaryPassword();
-
+        target.setMustChangePassword(true);
         target.setPasswordHash(passwordEncoder.encode(temporaryPassword));
         userRepository.save(target);
 
@@ -124,7 +123,7 @@ public class UserService {
                 target.getId(),
                 target.getEmail(),
                 temporaryPassword,
-                "Temporary password issued. It will not be shown again.");
+                "Temporary password issued. It will not be shown again. " + (target.isMustChangePassword() ? "User must change password on next login." : ""));
     }
 
     private String generateTemporaryPassword() {
@@ -137,6 +136,30 @@ public class UserService {
         }
 
         return builder.toString();
+    }
+
+    /**
+     * Self-service password change. Verifies the caller knows the current
+     * password, then hashes and stores the new one. Also clears the
+     * {@code mustChangePassword} flag so the account is no longer restricted.
+     */
+    @Transactional
+    public void changeOwnPassword(User user, String currentPassword, String newPassword) {
+
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            auditLogService.denied(AuditEvent.by("PASSWORD_CHANGE", user)
+                    .target(user)
+                    .details("Incorrect current password"));
+            throw new IllegalArgumentException("Current password is incorrect");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(false);
+        userRepository.save(user);
+
+        auditLogService.success(AuditEvent.by("PASSWORD_CHANGE", user)
+                .target(user)
+                .details("Password changed by the user"));
     }
 
     public User requireByEmail(String email) {
@@ -188,6 +211,8 @@ public class UserService {
         target.setRole(newRole);
         userRepository.save(target);
 
+        // Session expiry on role change - handled by SecurityConfig sessionManagement settings
+        // (migrateSession + maximumSessions configured in SecurityConfig)
         auditLogService.success(AuditEvent.by("ROLE_CHANGE", actor)
                 .target(target)
                 .details("Role changed from " + previous + " to " + newRole));
@@ -200,6 +225,7 @@ public class UserService {
                 user.getId(),
                 user.getFullName(),
                 user.getEmail(),
-                user.getRole().name());
+                user.getRole().name(),
+                user.isMustChangePassword());
     }
 }

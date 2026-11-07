@@ -45,10 +45,6 @@ public class FileValidationService {
 
     private final MalwareScanner malwareScanner;
 
-    public FileValidationService() {
-        this(new DefaultMalwareScanner());
-    }
-
     public FileValidationService(MalwareScanner malwareScanner) {
         this.malwareScanner = malwareScanner != null ? malwareScanner : new DefaultMalwareScanner();
     }

@@ -2,13 +2,14 @@ package com.trustvault.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
@@ -35,8 +36,8 @@ public class SecurityConfig {
 
     private static final String CONTENT_SECURITY_POLICY =
             "default-src 'self'; "
-            + "script-src 'self' 'unsafe-inline'; "
-            + "style-src 'self' 'unsafe-inline'; "
+            + "script-src 'self'; "
+            + "style-src 'self'; "
             + "img-src 'self' data:; "
             + "connect-src 'self'; "
             + "object-src 'none'; "
@@ -55,6 +56,11 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
+    }
+
+    @Bean
+    public SessionRegistry sessionRegistry() {
+        return new SessionRegistryImpl();
     }
 
     @Bean
@@ -98,7 +104,9 @@ public class SecurityConfig {
                         .clearAuthentication(true)
                         .deleteCookies("JSESSIONID", "XSRF-TOKEN"))
                 .sessionManagement(session -> session
-                        .sessionFixation(fixation -> fixation.migrateSession()))
+                        .sessionFixation(fixation -> fixation.migrateSession())
+                        .maximumSessions(1)
+                        .sessionRegistry(sessionRegistry()))
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(
                                 new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))

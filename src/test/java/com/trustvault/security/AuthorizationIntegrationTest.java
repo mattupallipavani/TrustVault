@@ -55,6 +55,7 @@ class AuthorizationIntegrationTest {
     private Long documentId;
     private Long intruderId;
     private Long viewerId;
+    private String issuedTemporaryPassword;
 
     @BeforeAll
     void setUp() throws Exception {
@@ -365,6 +366,7 @@ class AuthorizationIntegrationTest {
 
         String temporaryPassword = firstGroup(
                 reset.body(), "\"temporaryPassword\"\\s*:\\s*\"([^\"]+)\"");
+        this.issuedTemporaryPassword = temporaryPassword;
 
         assertNotEquals(DEMO_PASSWORD, temporaryPassword,
                 "a reset must not hand back the old password");
@@ -380,6 +382,57 @@ class AuthorizationIntegrationTest {
         assertEquals(200,
                 newPassword.attemptSignIn("viewer@trustvault.local", temporaryPassword)
                         .statusCode());
+    }
+
+    @Test
+    @Order(53)
+    void userChangesPasswordAndClearsMustChangePasswordFlag() throws Exception {
+
+        assertNotNull(issuedTemporaryPassword, "Temporary password should have been issued in step 52");
+
+        Session viewerSession = new Session();
+        assertEquals(200,
+                viewerSession.attemptSignIn("viewer@trustvault.local", issuedTemporaryPassword)
+                        .statusCode());
+        viewerSession.refreshCsrf();
+
+        // 1. Confirm mustChangePassword is true in /api/users/me
+        HttpResponse<String> meResponse = viewerSession.get("/api/users/me");
+        assertEquals(200, meResponse.statusCode());
+        assertTrue(meResponse.body().contains("\"mustChangePassword\":true"),
+                "User with temporary password must have mustChangePassword=true");
+
+        // 2. Changing password with wrong current password fails (400)
+        HttpResponse<String> wrongCurrent = viewerSession.postJson(
+                "/api/users/me/change-password",
+                "{\"currentPassword\":\"wrong-old-pwd\",\"newPassword\":\"Permanent#2026!\"}");
+        assertEquals(400, wrongCurrent.statusCode());
+
+        // 3. Changing password with correct temporary password succeeds
+        HttpResponse<String> correctChange = viewerSession.postJson(
+                "/api/users/me/change-password",
+                "{\"currentPassword\":\"" + issuedTemporaryPassword + "\",\"newPassword\":\"Permanent#2026!\"}");
+        assertEquals(200, correctChange.statusCode(), correctChange.body());
+
+        // 4. Confirm mustChangePassword is now false
+        HttpResponse<String> meUpdated = viewerSession.get("/api/users/me");
+        assertEquals(200, meUpdated.statusCode());
+        assertTrue(meUpdated.body().contains("\"mustChangePassword\":false"),
+                "User must have mustChangePassword=false after changing password");
+
+        // 5. Temporary password no longer works
+        Session tempAttempt = new Session();
+        assertEquals(401,
+                tempAttempt.attemptSignIn("viewer@trustvault.local", issuedTemporaryPassword)
+                        .statusCode(),
+                "Temporary password must stop working after change");
+
+        // 6. New permanent password works
+        Session permanentAttempt = new Session();
+        assertEquals(200,
+                permanentAttempt.attemptSignIn("viewer@trustvault.local", "Permanent#2026!")
+                        .statusCode(),
+                "New permanent password must work");
     }
 
     // ------------------------------------------------------------------
