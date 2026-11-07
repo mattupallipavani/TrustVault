@@ -36,12 +36,12 @@ USER trustvault:trustvault
 
 ENV STORAGE_LOCATION=/data \
     SESSION_COOKIE_SECURE=true \
-    JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+UseG1GC -Djava.security.egd=file:/dev/./urandom -Djava.io.tmpdir=/tmp/trustvault"
+    JAVA_OPTS="-XX:MaxRAMPercentage=55.0 -XX:+UseSerialGC -Xss512k -XX:MetaspaceSize=96m -XX:MaxMetaspaceSize=128m -Djava.security.egd=file:/dev/./urandom -Djava.io.tmpdir=/tmp/trustvault"
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:8080/actuator/health || exit 1
+  CMD curl -f http://localhost:${PORT:-8080}/actuator/health || exit 1
 
 STOPSIGNAL SIGTERM
 
