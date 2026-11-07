@@ -24,10 +24,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     @Query("""
             select a from AuditLog a
-            where (:action is null or a.action = :action)
-              and (:outcome is null or a.outcome = :outcome)
+            where (cast(:action as String) is null or a.action = :action)
+              and (cast(:outcome as String) is null or a.outcome = :outcome)
               and (:documentId is null or a.documentId = :documentId)
-              and (:actorEmail is null or lower(a.actorEmail) = lower(:actorEmail))
+              and (cast(:actorEmail as String) is null or lower(a.actorEmail) = lower(cast(:actorEmail as String)))
               and (:from is null or a.createdAt >= :from)
               and (:to is null or a.createdAt <= :to)
             order by a.id desc
@@ -43,10 +43,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     @Query("""
             select a from AuditLog a
-            where (:action is null or a.action = :action)
-              and (:outcome is null or a.outcome = :outcome)
+            where (cast(:action as String) is null or a.action = :action)
+              and (cast(:outcome as String) is null or a.outcome = :outcome)
               and (:documentId is null or a.documentId = :documentId)
-              and (:actorEmail is null or lower(a.actorEmail) = lower(:actorEmail))
+              and (cast(:actorEmail as String) is null or lower(a.actorEmail) = lower(cast(:actorEmail as String)))
               and (:from is null or a.createdAt >= :from)
               and (:to is null or a.createdAt <= :to)
             order by a.id desc

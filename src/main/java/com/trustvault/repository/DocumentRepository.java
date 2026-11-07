@@ -44,11 +44,11 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
                         where p.document = d and p.user.id = :userId
                     )
                   )
-              and (:keyword is null
-                   or lower(d.fileName) like lower(concat('%', :keyword, '%'))
-                   or lower(d.category) like lower(concat('%', :keyword, '%')))
-              and (:category is null or lower(d.category) = lower(:category))
-              and (:owner is null or lower(d.ownerEmail) = lower(:owner))
+              and (cast(:keyword as String) is null
+                   or lower(d.fileName) like lower(concat('%', cast(:keyword as String), '%'))
+                   or lower(d.category) like lower(concat('%', cast(:keyword as String), '%')))
+              and (cast(:category as String) is null or lower(d.category) = lower(cast(:category as String)))
+              and (cast(:owner as String) is null or lower(d.ownerEmail) = lower(cast(:owner as String)))
               and (:from is null or d.uploadedAt >= :from)
               and (:to is null or d.uploadedAt <= :to)
               and (:ownedOnly = false or d.ownerId = :userId)
@@ -75,11 +75,11 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
                         where p.document = d and p.user.id = :userId
                     )
                   )
-              and (:keyword is null
-                   or lower(d.fileName) like lower(concat('%', :keyword, '%'))
-                   or lower(d.category) like lower(concat('%', :keyword, '%')))
-              and (:category is null or lower(d.category) = lower(:category))
-              and (:owner is null or lower(d.ownerEmail) = lower(:owner))
+              and (cast(:keyword as String) is null
+                   or lower(d.fileName) like lower(concat('%', cast(:keyword as String), '%'))
+                   or lower(d.category) like lower(concat('%', cast(:keyword as String), '%')))
+              and (cast(:category as String) is null or lower(d.category) = lower(cast(:category as String)))
+              and (cast(:owner as String) is null or lower(d.ownerEmail) = lower(cast(:owner as String)))
               and (:from is null or d.uploadedAt >= :from)
               and (:to is null or d.uploadedAt <= :to)
               and (:ownedOnly = false or d.ownerId = :userId)
