@@ -49,6 +49,14 @@ Comprehensive adversarial analysis of TrustVault's architecture, threat mitigati
 * **Attack:** Forging state-mutating requests from a third-party site using ambient session cookies.
 * **Mitigation:** Cookie-to-header token verification (`X-XSRF-TOKEN` matched against `CookieCsrfTokenRepository`). Session cookies are configured with `SameSite=Lax` and `HttpOnly`.
 
+### 2.9 Administrative Temporary Password Impersonation
+* **Attack:** An administrator issues a temporary password for an account and retains access indefinitely, or the temporary password leaks during out-of-band communication.
+* **Mitigation:** Closed via `must_change_password` flag (`V3__session_and_password_policy.sql`). Issuing a temporary password sets `mustChangePassword = true`. The user is prompted to set their own secret via `POST /api/users/me/change-password`, which verifies the temporary password, re-hashes the new secret, clears the flag, and emits an audit event.
+
+### 2.10 Concurrent Session Hijacking & Stale Sessions
+* **Attack:** An attacker captures an active session while the legitimate user is also logged in, maintaining simultaneous access.
+* **Mitigation:** Closed via `SessionRegistry` and `maximumSessions(1)` configured in `SecurityConfig`. New logins supersede prior sessions (`migrateSession`), preventing multiple concurrent active sessions under a single user identity.
+
 ---
 
 ## 3. Residual Accepted Risks

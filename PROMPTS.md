@@ -213,3 +213,19 @@ none, the change is not done. Every entry above ends with that answer.
 5. **Brute Force Weakness:** Introduced `RedisRateLimiter` and `RateLimitingFilter` intercepting authentication paths with 429 status and audit logging.
 
 **Checked by.** `./mvnw test` — 49 tests passing, Flyway schema validation, Actuator health checks, and Swagger UI integration.
+
+---
+
+## 2026-11-08 — 8. "Close credential lifecycle, session concurrency, and architectural boundaries"
+
+**Prompt.** "Complete outstanding architectural and security gaps: force mandatory password changes when an administrator issues a temporary credential, enforce single active sessions per account, encode architectural layer boundaries as executable unit tests, and verify concurrent audit log integrity against real PostgreSQL."
+
+**Output.** Added `must_change_password` flag to `users` schema, `PasswordController` endpoint, ArchUnit 1.4.0 test suite, and Testcontainers PostgreSQL integration test.
+
+**Specific Errors Identified & Resolved:**
+1. **Permanent Temporary Credentials:** An administrator issuing a temporary password created a permanent credential known to both the user and the administrator. Resolved via migration `V3__session_and_password_policy.sql` setting `must_change_password = true`, requiring the user to invoke `POST /api/users/me/change-password` before restrictions are lifted.
+2. **ArchUnit Inner-Class & Shadowing Issues:** The initial ArchUnit rule for service naming flagged nested records (e.g., `DocumentDownloadService$DownloadPayload`, `StorageIntegrityService$Report`). Added `.areTopLevelClasses()` constraint. Also renamed the test method `testLayeredArchitecture()` to avoid shadowing the statically imported `layeredArchitecture()` method.
+3. **Audit Hash Field Reference:** The Testcontainers test referenced `AuditLog.getHash()` instead of the domain getter `AuditLog.getEntryHash()`.
+4. **Session Fixation & Multiple Concurrency:** Configured `SessionRegistryImpl` and `maximumSessions(1)` in `SecurityConfig` to invalidate previous sessions on new login.
+
+**Checked by.** `userChangesPasswordAndClearsMustChangePasswordFlag` (`AuthorizationIntegrationTest`), `ArchitectureTest` (9 rules), and `./mvnw test` (84 tests passing).
