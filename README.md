@@ -4,7 +4,7 @@
 
 Upload confidential contracts, employee records, financial reports, and sensitive business documents. Grant granular `READ` or `EDIT` permissions to named individuals, revoke them instantly, and prove who accessed what — including attempts that were refused.
 
-**Technology Stack:** Java 21 LTS · Spring Boot 3.4.x · Spring Security · Spring Data JPA · PostgreSQL 16 · Flyway Migrations · MinIO (S3) Object Storage · Redis 7 (Rate Limiting & Locking) · SpringDoc OpenAPI · Vanilla JS SPA.
+**Technology Stack:** Java 21 LTS · Spring Boot 4.1.x · Spring Security 7 · Spring Data JPA · PostgreSQL 16 · Flyway Migrations · MinIO (S3) Object Storage · Redis 7 (Rate Limiting & Locking) · SpringDoc OpenAPI · Vanilla JS SPA.
 
 ---
 
