@@ -138,6 +138,10 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required}
       MINIO_BUCKET: ${MINIO_BUCKET:-trustvault-documents}
+      # The browser must be able to reach this address for presigned links.
+      # Behind TLS termination, set it to the public HTTPS origin.
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://127.0.0.1:9000}
+      MINIO_PRESIGN_TTL_SECONDS: ${MINIO_PRESIGN_TTL_SECONDS:-60}
       STORAGE_TYPE: ${STORAGE_TYPE:-minio}
       STORAGE_LOCATION: /data
       DDL_AUTO: validate

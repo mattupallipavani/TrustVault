@@ -57,7 +57,10 @@ public class DocumentUploadService {
 
         String storageKey = java.util.UUID.randomUUID().toString();
         try (java.io.InputStream stream = file.getInputStream()) {
-            storageService.store(storageKey, stream, validated.size(), validated.contentType());
+            // The hash travels with the object so a later download can verify
+            // integrity from metadata instead of re-reading every byte.
+            storageService.store(storageKey, stream, validated.size(),
+                    validated.contentType(), validated.sha256());
         }
 
         try {

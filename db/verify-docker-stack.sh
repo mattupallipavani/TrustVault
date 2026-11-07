@@ -77,6 +77,52 @@ VERIFY=$(curl -s -b "$ADMIN_JAR" -c "$ADMIN_JAR" "$BASE/api/admin/audit/verify")
 printf '        %s\n' "$(printf '%s' "$VERIFY" | head -c 160)"
 printf '%s' "$VERIFY" | grep -q '"valid":true' && echo "  PASS  audit chain valid" || { echo "  FAIL  audit chain invalid"; FAIL=1; }
 
+echo "== archive-wide integrity sweep (ADMIN) =="
+TOKEN=$(csrf "$ADMIN_JAR")
+SWEEP=$(curl -s -X POST -b "$ADMIN_JAR" -c "$ADMIN_JAR" \
+  -H "X-XSRF-TOKEN: $TOKEN" "$BASE/api/admin/storage/verify")
+printf '        %s\n' "$(printf '%s' "$SWEEP" | head -c 200)"
+printf '%s' "$SWEEP" | grep -q '"allHealthy":true' && echo "  PASS  shallow sweep finds the archive healthy" || { echo "  FAIL  shallow sweep reported problems"; FAIL=1; }
+TOKEN=$(csrf "$ADMIN_JAR")
+DEEP=$(curl -s -X POST -b "$ADMIN_JAR" -c "$ADMIN_JAR" \
+  -H "X-XSRF-TOKEN: $TOKEN" "$BASE/api/admin/storage/verify?deep=true")
+printf '%s' "$DEEP" | grep -q '"deep":true' && echo "  PASS  deep sweep re-reads every object" || { echo "  FAIL  deep sweep not reported"; FAIL=1; }
+TOKEN=$(csrf "$VIEWER_JAR")
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -b "$VIEWER_JAR" -c "$VIEWER_JAR" \
+  -H "X-XSRF-TOKEN: $TOKEN" "$BASE/api/admin/storage/verify")
+check "viewer cannot run the sweep" "$code" "403"
+
+echo "== presigned direct link =="
+TOKEN=$(csrf "$JAR")
+LINK=$(curl -s -X POST -b "$JAR" -c "$JAR" -H "X-XSRF-TOKEN: $TOKEN" \
+  "$BASE/api/documents/$DOC_ID/download-url")
+URL=$(printf '%s' "$LINK" | python3 -c "import json,sys; print(json.load(sys.stdin).get('url',''))" 2>/dev/null)
+TTL=$(printf '%s' "$LINK" | python3 -c "import json,sys; print(json.load(sys.stdin).get('expiresInSeconds',0))" 2>/dev/null)
+[ -n "$URL" ] && echo "  PASS  link issued (ttl ${TTL}s)" || { echo "  FAIL  no presigned link: $(printf '%s' "$LINK" | head -c 150)"; FAIL=1; }
+# Fetched with no cookies at all: the URL is the only credential.
+DEST2=$(mktemp /tmp/tv-pre-XXXX).txt
+code=$(curl -s -o "$DEST2" -w '%{http_code}' "$URL")
+check "presigned link fetches without a session" "$code" "200"
+GOT2=$(shasum -a 256 "$DEST2" | awk '{print $1}')
+check "presigned bytes match SHA-256" "$([ "$WANT" = "$GOT2" ] && echo match || echo differ)" "match"
+[ "${TTL:-0}" -le 300 ] && echo "  PASS  link lifetime is bounded (${TTL}s <= 300s)" || { echo "  FAIL  link lifetime exceeds the 300s cap"; FAIL=1; }
+
+echo "== tamper detection (DB record no longer matches stored bytes) =="
+docker exec trustvault-postgres psql -U trustvault_app -d trustvault_db -q -c \
+  "UPDATE documents SET content_hash='deadbeef' WHERE id=$DOC_ID;" >/dev/null
+TOKEN=$(csrf "$JAR")
+code=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -c "$JAR" "$BASE/api/documents/$DOC_ID/download")
+check "download refused when integrity check fails" "$code" "500"
+TOKEN=$(csrf "$ADMIN_JAR")
+TAMPERED=$(curl -s -X POST -b "$ADMIN_JAR" -c "$ADMIN_JAR" \
+  -H "X-XSRF-TOKEN: $TOKEN" "$BASE/api/admin/storage/verify")
+printf '%s' "$TAMPERED" | grep -q '"allHealthy":false' && echo "  PASS  sweep surfaces the mismatch" || { echo "  FAIL  sweep missed the mismatch"; FAIL=1; }
+docker exec trustvault-postgres psql -U trustvault_app -d trustvault_db -q -c \
+  "UPDATE documents SET content_hash='$WANT' WHERE id=$DOC_ID;" >/dev/null
+TOKEN=$(csrf "$JAR")
+code=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -c "$JAR" "$BASE/api/documents/$DOC_ID/download")
+check "download works again after the record is corrected" "$code" "200"
+
 echo "== object really landed in MinIO =="
 # MinIO stores each object as <bucket>/<object-name>/xl.meta, so the object
 # count is the number of entries inside the bucket directory. The image has no
@@ -98,7 +144,7 @@ check "repeated failed logins are throttled" "$RL" "429"
 KEYS=$(docker exec trustvault-redis sh -c 'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning keys "*" | head -20' 2>/dev/null)
 [ -n "$KEYS" ] && echo "  PASS  credentials live in Redis: $(printf '%s' "$KEYS" | tr '\n' ' ')" || { echo "  FAIL  no rate-limit keys in Redis"; FAIL=1; }
 
-rm -f "$JAR" "$VIEWER_JAR" "$ADMIN_JAR" "$SRC" "$DEST"
+rm -f "$JAR" "$VIEWER_JAR" "$ADMIN_JAR" "$SRC" "$DEST" "$DEST2"
 echo
 [ "$FAIL" = "0" ] && echo "RESULT: all checks passed" || echo "RESULT: failures above"
 exit "$FAIL"

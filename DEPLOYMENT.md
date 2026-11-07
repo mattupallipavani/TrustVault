@@ -149,44 +149,101 @@ Execute audit chain recomputation:
 curl -s http://localhost:8080/api/admin/audit/verify
 ```
 
+### 4. Storage Integrity Sweep
+
+Checks that every stored object still matches the database: size, and the
+SHA-256 recorded at upload. This is the only check that covers documents nobody
+has downloaded recently, so it is what catches silent corruption.
+
+```bash
+# Shallow: one stat per document (metadata hash). Use in scheduled jobs.
+curl -s -X POST -b cookies -H "X-XSRF-TOKEN: $TOKEN" \
+  http://localhost:8080/api/admin/storage/verify
+
+# Deep: re-reads every object and recomputes its SHA-256. Costs a full read of
+# the archive; run it during maintenance windows, not on a timer.
+curl -s -X POST -b cookies -H "X-XSRF-TOKEN: $TOKEN" \
+  "http://localhost:8080/api/admin/storage/verify?deep=true"
+```
+
+Both return `checked`, `healthy`, `missing`, `sizeMismatched`, `hashMismatched`
+and up to 25 problem entries. The run itself is written to the audit log as
+`STORAGE_VERIFIED`, with a failure outcome if anything is wrong.
+
+### 5. Full Stack Verification
+```bash
+./db/verify-docker-stack.sh
+```
+Runs login for all three roles, upload, download with SHA-256 comparison,
+authorization denials, audit chain, integrity sweep, presigned link, tamper
+detection and Redis rate limiting. Exits non-zero on any failure.
+
+---
+
+## 5b. Object Storage Guarantees
+
+| Guarantee | How it is implemented |
+| :--- | :--- |
+| Content addressing | SHA-256 computed on upload, stored in `documents.content_hash` **and** as object metadata (`x-amz-meta-sha256`) |
+| Upload verified | Every PUT is followed by a `stat`; if size or hash differ the object is deleted and the upload fails |
+| Download verified | One `stat` compares size and metadata hash before streaming; a mismatch aborts with 500 and a failure audit row |
+| Archive sweep | `POST /api/admin/storage/verify` (shallow/deep) audits the whole archive |
+| Private bucket | No anonymous policy is ever set; only the application's credentials can read objects |
+| Versioning | Enabled on startup, so an overwrite or delete leaves the previous version recoverable |
+| Presigned links | `POST /api/documents/{id}/download-url` after a permission check; lifetime capped at 300s (default 60s) and the issuance is audited |
+
+The bucket is private, so a presigned URL is the only way out of the object
+store without the application proxying the bytes. Two consequences worth
+stating plainly:
+
+1. `MINIO_PUBLIC_ENDPOINT` must be the address the **client** can reach for
+   links to work (behind TLS, the public HTTPS origin). It is used only for
+   signing; the application still talks to the internal endpoint.
+2. A presigned URL is a bearer credential until it expires. It cannot be
+   revoked early and the fetch is not individually audited — only the issuance
+   is. Keep the lifetime short.
+
 ---
 
 ## 6. Backup & Disaster Recovery
 
-### PostgreSQL Backup
+PostgreSQL holds the document rows and the audit chain; MinIO holds the bytes
+they point at. A backup of one without the other restores to a system that
+looks healthy until someone downloads a file, so both are captured together by
+one script.
+
+### Backup
 ```bash
-docker compose exec postgres pg_dump -U trustvault_app -d trustvault_db -F c -b -v -f /tmp/backup.dump
-docker cp trustvault-postgres:/tmp/backup.dump ./backup-$(date +%F).dump
+./db/backup.sh                       # -> backups/<timestamp>/
+./db/backup.sh /secure/backups/tv1   # explicit destination
 ```
 
-### PostgreSQL Restore
+The application is stopped while the two halves are captured, so the database
+rows and the objects cannot disagree. The script writes:
+
+| File | Contents |
+| :--- | :--- |
+| `db.dump` | PostgreSQL custom-format dump (rows, schema, audit chain) |
+| `minio.tar.gz` | the object volume |
+| `manifest.txt` | row counts, Flyway version and audit chain head |
+| `SHA256SUMS` | checksums of both archives |
+
+`backups/` is gitignored: it contains real document bytes and user data.
+
+### Restore
 ```bash
-docker cp ./backup-2026-11-08.dump trustvault-postgres:/tmp/backup.dump
-docker compose exec postgres pg_restore -U trustvault_app -d trustvault_db -v -c /tmp/backup.dump
+./db/restore.sh backups/20261108-031413
 ```
 
-### MinIO Document Backup
+Verifies the checksums first, recreates the schema, restores the dump, replaces
+the object volume, and restarts the stack. It then prints the restored row
+counts; finish with `./db/verify-docker-stack.sh`, whose integrity sweep must
+report `allHealthy`.
 
-MinIO no longer publishes a client image (`minio/mc` is gone along with the
-server images), so documents are backed up from the volume directly. This needs
-no credentials and cannot be redirected to the wrong bucket:
-
-```bash
-# 1. Quiesce writes, then archive the object volume
-docker compose stop app
-docker run --rm \
-  -v trustvault5_minio-data:/data:ro \
-  -v "$PWD":/backup \
-  alpine tar czf /backup/minio-$(date +%F).tar.gz -C /data .
-docker compose start app
-
-# 2. Confirm the archive lists objects before you rely on it
-tar tzf minio-$(date +%F).tar.gz | head
-```
-
-Object keys live in PostgreSQL (`documents.storage_key`), so restore the
-database and this archive together — one without the other leaves rows pointing
-at missing bytes.
+This path is tested, not assumed: the volumes were destroyed with
+`docker compose down -v` and rebuilt from a backup, after which a restored
+document downloaded to the exact SHA-256 it had before, the audit chain verified
+and the sweep reported every object healthy.
 
 ---
 

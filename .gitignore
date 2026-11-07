@@ -10,6 +10,8 @@ target/
 .env.*
 !.env.example
 trustvault-storage/
+# Database dumps and object archives contain real document bytes and user data.
+backups/
 *.log
 
 ### STS ###

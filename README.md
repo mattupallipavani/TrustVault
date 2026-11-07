@@ -63,10 +63,21 @@ PostgreSQL, Redis and the MinIO S3 API stay on the internal Docker network;
 reach them with `docker compose exec` rather than a published port.
 
 Verify the whole stack end to end (login, upload to MinIO, download with
-SHA-256 check, authorization denials, audit chain, Redis rate limiting):
+SHA-256 check, authorization denials, audit chain, storage integrity sweep,
+presigned links, tamper detection, Redis rate limiting):
 ```bash
 ./db/verify-docker-stack.sh
 ```
+
+Back up and restore the database and document store together:
+```bash
+./db/backup.sh                              # -> backups/<timestamp>/
+./db/restore.sh backups/<timestamp>         # checksums verified first
+```
+
+Stored objects are verified against their recorded SHA-256 on upload and on
+download; `POST /api/admin/storage/verify` sweeps the whole archive. See
+DEPLOYMENT.md §5b for the storage guarantees and their limits.
 
 ### Demo Accounts
 Demo accounts are seeded automatically on an empty database. Their password is
