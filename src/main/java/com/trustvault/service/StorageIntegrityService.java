@@ -79,8 +79,15 @@ public class StorageIntegrityService {
                 String actual = deep ? storageService.hashOf(storageKey)
                         : storageService.storedHash(storageKey);
 
-                // A provider that keeps no metadata simply cannot answer a
-                // shallow check; that is not evidence of corruption.
+                // No metadata on this object is not the same as "nothing to
+                // check": objects written before metadata existed, or restored
+                // from an older backup, have none. Falling back to a full read
+                // keeps the cheap sweep honest instead of reporting healthy on
+                // absent evidence.
+                if (!deep && actual == null) {
+                    actual = storageService.hashOf(storageKey);
+                }
+
                 if (actual != null && !expected.equals(actual)) {
                     hashMismatched++;
                     add(issues, document, "SHA-256 is " + actual + ", expected " + expected);

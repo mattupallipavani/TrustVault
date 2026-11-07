@@ -111,6 +111,41 @@ class StorageIntegrityServiceTest {
         assertEquals(1, report.hashMismatched());
     }
 
+    /**
+     * Objects written before metadata existed must not be reported healthy just
+     * because there is nothing to compare: the sweep falls back to a full read
+     * instead. This is the bug the restore test surfaced.
+     */
+    @Test
+    void shallowSweepReHashesWhenTheObjectHasNoMetadata() throws IOException {
+        Document document = document(6, "abc123", 10L);
+        when(documentRepository.findAll()).thenReturn(List.of(document));
+        when(storageService.exists(document.getStorageKey())).thenReturn(true);
+        when(storageService.sizeOf(document.getStorageKey())).thenReturn(10L);
+        when(storageService.storedHash(document.getStorageKey())).thenReturn(null);
+        when(storageService.hashOf(document.getStorageKey())).thenReturn("tampered");
+
+        StorageIntegrityService.Report report = service.verify(false);
+
+        assertFalse(report.allHealthy());
+        assertEquals(1, report.hashMismatched());
+        verify(storageService).hashOf(document.getStorageKey());
+    }
+
+    @Test
+    void shallowSweepPassesWhenTheFallbackHashMatches() throws IOException {
+        Document document = document(7, "abc123", 10L);
+        when(documentRepository.findAll()).thenReturn(List.of(document));
+        when(storageService.exists(document.getStorageKey())).thenReturn(true);
+        when(storageService.sizeOf(document.getStorageKey())).thenReturn(10L);
+        when(storageService.storedHash(document.getStorageKey())).thenReturn(null);
+        when(storageService.hashOf(document.getStorageKey())).thenReturn("abc123");
+
+        StorageIntegrityService.Report report = service.verify(false);
+
+        assertTrue(report.allHealthy());
+    }
+
     @Test
     void deepSweepRecomputesInsteadOfTrustingMetadata() throws IOException {
         Document document = document(5, "abc123", 10L);
