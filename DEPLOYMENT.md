@@ -326,3 +326,88 @@ and the sweep reported every object healthy.
 | HTTP 429 on `/api/auth/login` | Exceeded 15 attempts in 1-minute sliding window | Wait 60 seconds for Redis sliding window counter expiration. |
 | `AccessDeniedException` on `/api/admin/**` | Logged in user does not hold `ADMIN` role | Authenticate with an administrator account (`admin@trustvault.local`). |
 
+---
+
+## 8. Zero-Cost Cloud Deployment (Render + Supabase)
+
+This architecture achieves **100% free hosting (₹0.00)** with no credit cards, no trial traps, and zero risk of unexpected charges.
+
+### Architecture Overview
+
+* **Application Host:** Render Free Web Service (Docker runtime, 512 MB RAM, 0.1 vCPU).
+* **Database:** Supabase Free PostgreSQL (500 MB limit, IPv4 Session Connection Pooler).
+* **Document Storage:** Supabase Free Storage (1 GB private bucket, authenticated REST API).
+* **Frontend:** Embedded Single-Page Application (SPA) served directly from the Spring Boot JAR on Render.
+
+---
+
+### Step 1: Provision Free Supabase Database & Storage
+
+1. Create a free account at [supabase.com](https://supabase.com).
+2. Click **New Project**:
+   * Name: `trustvault-prod`
+   * Set a strong database password and save it.
+   * Region: Choose the closest region (e.g. Singapore, Frankfurt, US East).
+   * Plan: **Free** (₹0).
+3. **Get the Session Pooler Database URL**:
+   * Go to **Project Settings** (gear icon) $\to$ **Database**.
+   * Scroll down to **Connection string** and select the **Connection Pooling** tab.
+   * Set **Mode** to **Session** (Port `5432`). **Do not use Transaction mode (6543)** because Flyway migration locks require session mode.
+   * Note the connection details:
+     * Host: `aws-0-[region].pooler.supabase.com`
+     * Port: `5432`
+     * Database: `postgres`
+     * Username: `postgres.[project-ref]`
+4. **Create the Private Storage Bucket**:
+   * In the left navigation, click **Storage**.
+   * Click **New Bucket**.
+   * Name: `trustvault-documents`.
+   * **Leave "Public bucket" toggled OFF** (must remain private).
+   * Click **Save bucket**.
+5. **Get the API Credentials**:
+   * Go to **Project Settings** $\to$ **API**.
+   * Copy the **Project URL** (`https://[project-ref].supabase.co`).
+   * Copy the **`service_role` secret key** (click the eye icon). *Keep this secret; it is used only by the Spring Boot backend to access the private bucket.*
+
+---
+
+### Step 2: Deploy to Render Free Web Service
+
+1. Create a free account at [render.com](https://render.com) using your GitHub account (`mattupallipavani`).
+2. Click **New +** $\to$ **Web Service**.
+3. Select **Build and deploy from a Git repository** and pick `mattupallipavani/TrustVault`.
+4. Configure service settings:
+   * **Name:** `trustvault`
+   * **Region:** Same region as your Supabase project (e.g. Oregon, Frankfurt, Singapore).
+   * **Branch:** `main`
+   * **Runtime:** **Docker**
+   * **Instance Type:** **Free** (512 MB RAM, 0.1 CPU, ₹0/month)
+5. Add the following **Environment Variables** in Render:
+
+| Key | Value | Notes |
+| :--- | :--- | :--- |
+| `DB_URL` | `jdbc:postgresql://aws-0-[region].pooler.supabase.com:5432/postgres?sslmode=require` | Supabase IPv4 Session Pooler |
+| `DB_USERNAME` | `postgres.[project-ref]` | Supabase pooler username |
+| `DB_PASSWORD` | `[YOUR_SUPABASE_PASSWORD]` | Database password |
+| `STORAGE_TYPE` | `supabase` | Activates Supabase Storage adapter |
+| `SUPABASE_URL` | `https://[project-ref].supabase.co` | Supabase API endpoint |
+| `SUPABASE_SERVICE_KEY` | `[YOUR_SERVICE_ROLE_KEY]` | Backend-only storage credentials |
+| `SUPABASE_BUCKET` | `trustvault-documents` | Private bucket name |
+| `DEMO_PASSWORD` | `[A-Strong-Initial-Password]` | Initial seed account password |
+| `SESSION_COOKIE_SECURE` | `true` | Enforces HTTPS session cookies on Render |
+| `MANAGEMENT_HEALTH_REDIS_ENABLED` | `false` | Keeps Actuator healthy without Redis |
+
+6. Under **Advanced Settings**, set **Health Check Path** to:
+   `/actuator/health`
+7. Click **Create Web Service**.
+
+Render will pull the repository, build the multi-stage Docker image, bind to Render's dynamic `$PORT`, execute Flyway migrations against Supabase, and expose your live HTTPS application at `https://trustvault-xxxx.onrender.com`.
+
+---
+
+### Free Tier Limits & Avoiding Charges
+
+* **Render Inactivity Spin-Down:** Free instances spin down after 15 minutes of inactivity. The first request after idling takes ~50 seconds (cold start). Once awake, requests are fast.
+* **Supabase 7-Day Inactivity Pause:** If the database receives no queries for 7 consecutive days, Supabase pauses it. To resume, log into the Supabase dashboard and click **Restore project** (free, takes ~1 minute, zero data loss).
+* **Storage Cap:** The free tier includes 1 GB storage. Uploads exceeding 1 GB are rejected with an error; no overage fees are ever charged.
+
