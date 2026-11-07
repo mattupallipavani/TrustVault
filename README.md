@@ -55,11 +55,23 @@ docker compose up -d --build
 Access the application:
 * Web UI: [http://localhost:8080](http://localhost:8080)
 * Swagger UI: [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
-* Actuator Health: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
-* MinIO Console: [http://localhost:9001](http://localhost:9001)
+* Actuator Health: [http://localhost:8080/api/health](http://localhost:8080/api/health)
+* MinIO Console: [http://localhost:9001](http://localhost:9001) (loopback only)
+
+Only the application and the MinIO console are reachable from the host.
+PostgreSQL, Redis and the MinIO S3 API stay on the internal Docker network;
+reach them with `docker compose exec` rather than a published port.
+
+Verify the whole stack end to end (login, upload to MinIO, download with
+SHA-256 check, authorization denials, audit chain, Redis rate limiting):
+```bash
+./db/verify-docker-stack.sh
+```
 
 ### Demo Accounts
-Demo accounts are seeded automatically on an empty database:
+Demo accounts are seeded automatically on an empty database. Their password is
+whatever `DEMO_PASSWORD` is set to in `.env` — the values below are the
+`.env.example` default, intended for local demonstration only:
 
 | Email | Role | Password |
 | :--- | :--- | :--- |
@@ -73,13 +85,24 @@ Demo accounts are seeded automatically on an empty database:
 
 Requirements: Java 21 LTS, Maven Wrapper.
 
-```bash
-# 1. Run PostgreSQL and Redis locally or via Docker
-docker compose up -d postgres redis minio
+Run the dependencies in Docker and the application on the host. The base
+Compose file publishes no dependency ports, so use the development override,
+which binds them to loopback only:
 
-# 2. Run Spring Boot application
-export DB_URL="jdbc:postgresql://localhost:5432/trustvault_db"
-export DB_PASSWORD="your-strong-password"
+```bash
+# 1. Start PostgreSQL, Redis and MinIO (ports published on 127.0.0.1)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis minio
+
+# 2. Run the Spring Boot application against them
+export DB_URL="jdbc:postgresql://127.0.0.1:5432/trustvault_db"
+export DB_USERNAME="trustvault_app"
+export DB_PASSWORD="$(grep -E '^DB_PASSWORD=' .env | cut -d= -f2-)"
+export REDIS_HOST="127.0.0.1"
+export REDIS_PASSWORD="$(grep -E '^REDIS_PASSWORD=' .env | cut -d= -f2-)"
+export MINIO_ENDPOINT="http://127.0.0.1:9000"
+export MINIO_ACCESS_KEY="$(grep -E '^MINIO_ACCESS_KEY=' .env | cut -d= -f2-)"
+export MINIO_SECRET_KEY="$(grep -E '^MINIO_SECRET_KEY=' .env | cut -d= -f2-)"
+export STORAGE_TYPE="minio"
 ./mvnw spring-boot:run
 ```
 

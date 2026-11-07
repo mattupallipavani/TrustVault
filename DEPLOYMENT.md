@@ -17,10 +17,17 @@ This guide covers production deployment, environment provisioning, backup/restor
 
 The deployment topology consists of 4 isolated containerized services connected over an internal Docker bridge network (`trustvault-net`):
 
-1. **`trustvault-app`**: Spring Boot 3.4.x application running as non-root user `trustvault` (UID 10001) on port `8080`.
+1. **`trustvault-app`**: Spring Boot 4.1.x application running as non-root user `trustvault` (UID 10001) on port `8080`.
 2. **`trustvault-postgres`**: PostgreSQL 16 Alpine with Flyway schema migration lifecycle.
 3. **`trustvault-redis`**: Redis 7.4 Alpine for sliding-window rate limiting and distributed audit lock coordination.
 4. **`trustvault-minio`**: MinIO S3-compatible private object store (API on `9000`, Admin Console on `9001`).
+
+**Only the application (8080) and the MinIO console (9001) are published, and
+the console is bound to `127.0.0.1`. PostgreSQL, Redis and the MinIO S3 API are
+reachable only from containers on `trustvault-net`.** Use `docker compose exec`
+for administrative access instead of exposing those ports. For a host-run JVM
+against containerised dependencies, use `docker-compose.dev.yml`, which
+publishes them on loopback only.
 
 ---
 
@@ -39,8 +46,8 @@ The deployment topology consists of 4 isolated containerized services connected 
 
    REDIS_PASSWORD=YOUR_STRONG_REDIS_PASSWORD
 
-   MINIO_ROOT_USER=trustvault_admin
-   MINIO_ROOT_PASSWORD=YOUR_STRONG_MINIO_SECRET_KEY
+   MINIO_ACCESS_KEY=trustvault_admin
+   MINIO_SECRET_KEY=YOUR_STRONG_MINIO_SECRET_KEY
    MINIO_BUCKET=trustvault-documents
    STORAGE_TYPE=minio
 
@@ -159,13 +166,27 @@ docker compose exec postgres pg_restore -U trustvault_app -d trustvault_db -v -c
 ```
 
 ### MinIO Document Backup
-Sync document bucket to an encrypted backup volume:
+
+MinIO no longer publishes a client image (`minio/mc` is gone along with the
+server images), so documents are backed up from the volume directly. This needs
+no credentials and cannot be redirected to the wrong bucket:
+
 ```bash
-docker run --rm --network trustvault_trustvault-net \
-  -e MINIO_ACCESS_KEY=trustvault_admin \
-  -e MINIO_SECRET_KEY=YOUR_STRONG_MINIO_SECRET_KEY \
-  minio/mc mirror http://minio:9000/trustvault-documents /backup/documents
+# 1. Quiesce writes, then archive the object volume
+docker compose stop app
+docker run --rm \
+  -v trustvault5_minio-data:/data:ro \
+  -v "$PWD":/backup \
+  alpine tar czf /backup/minio-$(date +%F).tar.gz -C /data .
+docker compose start app
+
+# 2. Confirm the archive lists objects before you rely on it
+tar tzf minio-$(date +%F).tar.gz | head
 ```
+
+Object keys live in PostgreSQL (`documents.storage_key`), so restore the
+database and this archive together — one without the other leaves rows pointing
+at missing bytes.
 
 ---
 
@@ -174,6 +195,7 @@ docker run --rm --network trustvault_trustvault-net \
 | Issue | Probable Cause | Remediation |
 | :--- | :--- | :--- |
 | `FlywayValidateException` on startup | Database schema manually modified out-of-band | Run Flyway repair or revert conflicting column changes. |
+| `pull access denied for minio/minio` | MinIO removed its public images (Docker Hub 2026-09-12, quay.io now 401 for all tags) | The stack pins `cgr.dev/chainguard/minio` by digest instead. Do not re-point it at `minio/minio`. |
 | `MinIO connection refused` | `trustvault-minio` container still initializing | Ensure `depends_on: { minio: { condition: service_healthy } }` is enforced. |
 | HTTP 429 on `/api/auth/login` | Exceeded 15 attempts in 1-minute sliding window | Wait 60 seconds for Redis sliding window counter expiration. |
 | `AccessDeniedException` on `/api/admin/**` | Logged in user does not hold `ADMIN` role | Authenticate with an administrator account (`admin@trustvault.local`). |

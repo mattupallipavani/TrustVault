@@ -1,4 +1,17 @@
-version: '3.8'
+# ---------------------------------------------------------------------------
+# TrustVault - local / single-node stack
+#
+# Security posture:
+#   * Only the application (8080) and the MinIO console (9001, loopback) are
+#     reachable from the host. PostgreSQL, Redis and the MinIO S3 API are on an
+#     internal network only - publishing them is how a dev stack becomes an
+#     open database.
+#   * Every credential comes from .env; nothing is defaulted to a known value
+#     that works, so an unconfigured deploy fails loudly instead of running
+#     with a guessable password.
+#   * Resource limits and log caps keep one runaway service from taking the
+#     machine or the disk with it.
+# ---------------------------------------------------------------------------
 
 services:
   postgres:
@@ -15,8 +28,6 @@ services:
       - "max_connections=100"
       - "-c"
       - "shared_buffers=128MB"
-    ports:
-      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -24,46 +35,82 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
     networks:
       - trustvault-net
+    mem_limit: 512m
+    cpus: 1.0
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis:7.4-alpine
     container_name: trustvault-redis
     restart: unless-stopped
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
+    command:
+      - "redis-server"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      - "--appendonly"
+      - "yes"
+      - "--maxmemory"
+      - "128mb"
+      - "--maxmemory-policy"
+      - "noeviction"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     networks:
       - trustvault-net
+    mem_limit: 256m
+    cpus: 0.5
+    logging: *default-logging
 
   minio:
-    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    # MinIO stopped publishing community images: minio/minio was removed from
+    # Docker Hub (2026-09-12) and quay.io/minio now answers 401 for every tag.
+    # Chainguard builds a maintained MinIO server; pinned by digest so a
+    # retagged image cannot silently change what runs here.
+    image: cgr.dev/chainguard/minio@sha256:869ca3178831d9f521ea02258a0f0d4fbc1e9f84302e707514e1f861b860865d
     container_name: trustvault-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required}
+    # Both bound to loopback: the console for humans, the API for local
+    # verification. Neither is reachable from the network.
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio-data:/data
+    # The Chainguard image ships bash but no curl/wget, so readiness is probed
+    # with a raw HTTP request over bash's /dev/tcp. A bare TCP accept would
+    # report healthy while the server is still refusing requests.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test:
+        - "CMD-SHELL"
+        # No grep/curl in this image, so the status line is matched with case.
+        - "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /minio/health/live HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n' >&3 && { IFS= read -r status <&3; case \"$$status\" in *200*) exit 0;; *) exit 1;; esac; }"
       interval: 5s
-      timeout: 3s
+      timeout: 4s
       retries: 10
+      start_period: 5s
     networks:
       - trustvault-net
+    mem_limit: 512m
+    cpus: 1.0
+    logging: *default-logging
 
   app:
     build:
@@ -71,6 +118,7 @@ services:
       dockerfile: Dockerfile
     container_name: trustvault-app
     restart: unless-stopped
+    init: true
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,26 +130,41 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-trustvault_db}
       DB_USERNAME: ${DB_USERNAME:-trustvault_app}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required}
       MINIO_BUCKET: ${MINIO_BUCKET:-trustvault-documents}
-      DEMO_PASSWORD: ${DEMO_PASSWORD:-TrustVault#2026}
-      SEED_ENABLED: ${SEED_ENABLED:-true}
-      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       STORAGE_TYPE: ${STORAGE_TYPE:-minio}
       STORAGE_LOCATION: /data
       DDL_AUTO: validate
+      # Demo seeding requires an explicitly supplied password; no default.
+      SEED_ENABLED: ${SEED_ENABLED:-true}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?DEMO_PASSWORD is required when SEED_ENABLED=true}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      # Graceful shutdown: finish in-flight uploads/downloads, then exit.
+      SERVER_SHUTDOWN: graceful
+      SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 30s
+      JAVA_OPTS: "-XX:MaxRAMPercentage=70 -XX:+UseG1GC -Djava.security.egd=file:/dev/./urandom -Djava.io.tmpdir=/tmp/trustvault"
     ports:
       - "8080:8080"
     volumes:
       - vault-data:/data
     networks:
       - trustvault-net
+    mem_limit: 1g
+    cpus: 1.5
+    stop_grace_period: 40s
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 45s
 
 networks:
   trustvault-net:

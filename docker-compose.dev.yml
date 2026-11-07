@@ -1,0 +1,19 @@
+# Local development override: run the dependencies in Docker and the
+# application on the host. The base file deliberately publishes no database,
+# Redis or S3 ports; this override exposes them on loopback only so a
+# host-run JVM can reach them.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis minio
+#
+# Never use this file for a shared or production deployment.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+  minio:
+    # 9001 is already published by the base file; 9000 (the S3 API) is added.
+    ports:
+      - "127.0.0.1:9000:9000"
