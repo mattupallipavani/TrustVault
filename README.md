@@ -76,8 +76,9 @@ Back up and restore the database and document store together:
 ```
 
 Stored objects are verified against their recorded SHA-256 on upload and on
-download; `POST /api/admin/storage/verify` sweeps the whole archive. See
-DEPLOYMENT.md §5b for the storage guarantees and their limits.
+download; `POST /api/admin/storage/verify` sweeps the whole archive. An
+integrity sweep runs daily and superseded object versions expire after 30 days,
+both audited and alerted on failure — see DEPLOYMENT.md §5b and §5c.
 
 ### Demo Accounts
 Demo accounts are seeded automatically on an empty database. Their password is

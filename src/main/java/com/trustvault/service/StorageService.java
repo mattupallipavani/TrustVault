@@ -76,5 +76,18 @@ public interface StorageService {
         throw new UnsupportedOperationException(
                 "Presigned downloads are not supported by this storage provider");
     }
+
+    /**
+     * Removes superseded object versions older than the given age.
+     *
+     * Only non-current versions may be removed: deleting the current version
+     * would destroy live data, and deleting a delete marker would resurrect a
+     * document someone chose to delete. Providers that keep no versions return
+     * 0 rather than pretending they performed retention.
+     */
+    default int expireVersions(Duration olderThan) throws IOException {
+        throw new UnsupportedOperationException(
+                "Version retention is not supported by this storage provider");
+    }
 }
 

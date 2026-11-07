@@ -3,6 +3,7 @@ package com.trustvault.service;
 import io.minio.*;
 import io.minio.errors.*;
 import io.minio.http.Method;
+import io.minio.messages.Item;
 import io.minio.messages.VersioningConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +16,7 @@ import java.io.InputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -322,5 +324,62 @@ public class MinioStorageService implements StorageService {
 
     public Duration presignTtl() {
         return presignTtl;
+    }
+
+    /**
+     * Expires superseded versions so versioning does not grow without bound and
+     * deleted documents do not live in storage forever.
+     *
+     * Two things are deliberately never touched:
+     *  - the current version, which is the live object;
+     *  - delete markers, because removing the marker makes the previous version
+     *    current again - a deleted document would silently reappear.
+     */
+    @Override
+    public int expireVersions(Duration olderThan) throws IOException {
+        if (olderThan == null || olderThan.isNegative()) {
+            throw new IllegalArgumentException("Retention age must be zero or positive");
+        }
+
+        Instant cutoff = Instant.now().minus(olderThan);
+        int expired = 0;
+
+        try {
+            Iterable<Result<Item>> versions = minioClient.listObjects(
+                    ListObjectsArgs.builder()
+                            .bucket(bucketName)
+                            .recursive(true)
+                            .includeVersions(true)
+                            .build());
+
+            for (Result<Item> result : versions) {
+                Item item = result.get();
+
+                if (item.isLatest() || item.isDeleteMarker()) {
+                    continue;
+                }
+
+                if (item.lastModified() == null || !item.lastModified().toInstant().isBefore(cutoff)) {
+                    continue;
+                }
+
+                minioClient.removeObject(RemoveObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(item.objectName())
+                        .versionId(item.versionId())
+                        .build());
+
+                expired++;
+            }
+
+            if (expired > 0) {
+                log.info("Expired {} superseded object version(s) older than {}", expired, olderThan);
+            }
+
+            return expired;
+
+        } catch (Exception e) {
+            throw new IOException("Failed to expire object versions", e);
+        }
     }
 }

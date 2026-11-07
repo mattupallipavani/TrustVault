@@ -123,6 +123,46 @@ TOKEN=$(csrf "$JAR")
 code=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -c "$JAR" "$BASE/api/documents/$DOC_ID/download")
 check "download works again after the record is corrected" "$code" "200"
 
+echo "== scheduled maintenance: retention and health surface =="
+# Deleting a document leaves a delete marker plus the superseded object
+# version, which is exactly what retention is supposed to clean up.
+TOKEN=$(csrf "$JAR")
+RET=$(curl -s -c "$JAR" -b "$JAR" -H "X-XSRF-TOKEN: $TOKEN" \
+  -F "file=@$SRC" -F "category=General" "$BASE/api/documents/upload")
+RET_ID=$(printf '%s' "$RET" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
+TOKEN=$(csrf "$JAR")
+code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE -b "$JAR" -c "$JAR" \
+  -H "X-XSRF-TOKEN: $TOKEN" "$BASE/api/documents/$RET_ID")
+check "document deleted (leaving a superseded version)" "$code" "200"
+
+TOKEN=$(csrf "$ADMIN_JAR")
+OUT=$(curl -s -X POST -b "$ADMIN_JAR" -c "$ADMIN_JAR" \
+  -H "X-XSRF-TOKEN: $TOKEN" "$BASE/api/admin/storage/retention?days=0")
+printf '        %s\n' "$(printf '%s' "$OUT" | head -c 160)"
+EXPIRED=$(printf '%s' "$OUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('expired',0))" 2>/dev/null)
+[ "${EXPIRED:-0}" -ge 1 ] && echo "  PASS  retention expired $EXPIRED superseded version(s)" || { echo "  FAIL  retention expired nothing"; FAIL=1; }
+
+# The delete marker must survive: removing it would make the previous version
+# current again and silently resurrect a document the owner deleted.
+code=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -c "$JAR" "$BASE/api/documents/$RET_ID/download")
+check "deleted document stays deleted" "$code" "404"
+
+TOKEN=$(csrf "$VIEWER_JAR")
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -b "$VIEWER_JAR" -c "$VIEWER_JAR" \
+  -H "X-XSRF-TOKEN: $TOKEN" "$BASE/api/admin/storage/retention")
+check "viewer cannot trigger retention" "$code" "403"
+
+TOKEN=$(csrf "$ADMIN_JAR")
+STATUS=$(curl -s -b "$ADMIN_JAR" -c "$ADMIN_JAR" "$BASE/api/admin/storage/maintenance/status")
+printf '        %s\n' "$(printf '%s' "$STATUS" | head -c 200)"
+printf '%s' "$STATUS" | grep -q '"schedulingEnabled":true' && echo "  PASS  scheduling reported enabled" || { echo "  FAIL  scheduling not enabled"; FAIL=1; }
+printf '%s' "$STATUS" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('lastIntegrityRun') else 1)" \
+  && echo "  PASS  integrity run recorded" || { echo "  FAIL  no integrity run recorded"; FAIL=1; }
+
+HEALTH=$(curl -s -b "$ADMIN_JAR" -c "$ADMIN_JAR" "$BASE/actuator/health")
+printf '%s' "$HEALTH" | grep -q 'storageMaintenance' && echo "  PASS  health exposes the maintenance component" || { echo "  FAIL  maintenance component missing from health"; FAIL=1; }
+printf '%s' "$HEALTH" | grep -q '"status":"UP"' && echo "  PASS  actuator reports UP" || { echo "  FAIL  actuator not UP: $(printf '%s' "$HEALTH" | head -c 200)"; FAIL=1; }
+
 echo "== object really landed in MinIO =="
 # MinIO stores each object as <bucket>/<object-name>/xl.meta, so the object
 # count is the number of entries inside the bucket directory. The image has no

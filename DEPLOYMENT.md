@@ -205,6 +205,75 @@ stating plainly:
 
 ---
 
+## 5c. Scheduled Maintenance
+
+Two jobs keep the archive trustworthy without anyone remembering to run them.
+Both are recorded in the audit log, alerted on failure, and reflected in
+`/actuator/health`.
+
+| Job | Default schedule | What it does | Cost |
+| :--- | :--- | :--- | :--- |
+| Integrity sweep | `0 0 3 * * *` (daily 03:00) | Compares every document against its recorded size and SHA-256 using object metadata | One stat per document |
+| Deep integrity sweep | `0 0 4 * * SUN` (weekly, off by default) | Re-reads every object and recomputes its SHA-256 | A full read of the archive |
+| Version retention | `0 30 3 * * *` (daily 03:30) | Removes superseded object versions older than `MAINTENANCE_RETENTION_DAYS` (30) | One listing per object |
+
+### Retention semantics
+
+Only **superseded** versions are removed. Two things are never touched:
+
+- **The current version** — that is the live object.
+- **Delete markers** — removing one makes the previous version current again, so
+a deleted document would silently reappear. Markers are tiny; keeping them is
+the safe choice.
+
+### Configuration
+
+| Variable | Default | Meaning |
+| :--- | :--- | :--- |
+| `MAINTENANCE_ENABLED` | `true` | Master switch for all scheduled jobs |
+| `MAINTENANCE_INTEGRITY_ENABLED` | `true` | Daily sweep on/off |
+| `MAINTENANCE_INTEGRITY_CRON` | `0 0 3 * * *` | Spring 6-field cron |
+| `MAINTENANCE_DEEP_ENABLED` | `false` | Enable the weekly full re-hash |
+| `MAINTENANCE_RETENTION_ENABLED` | `true` | Retention on/off |
+| `MAINTENANCE_RETENTION_CRON` | `0 30 3 * * *` | Retention cron |
+| `MAINTENANCE_RETENTION_DAYS` | `30` | Age at which a superseded version is removed |
+| `MAINTENANCE_STALE_AFTER_HOURS` | `48` | Age at which "no recent sweep" turns the health component DOWN |
+| `MAINTENANCE_ALERT_WEBHOOK` | *(empty)* | Slack-compatible incoming webhook for failures |
+
+### Alerting
+
+A failure fans out three ways, because each covers a different failure mode:
+
+1. **Audit row** — `STORAGE_VERIFIED` or `STORAGE_RETENTION` with a failure
+   outcome, in the tamper-evident chain.
+2. **Webhook** — POSTs `{"text": "..."}` to `MAINTENANCE_ALERT_WEBHOOK` when set.
+   Delivery failure is logged and swallowed: alerting must never break the job
+   it is reporting on.
+3. **Health** — `/actuator/health` exposes a `storageMaintenance` component that
+   goes **DOWN** on a failed sweep, and also when the last sweep is older than
+   `MAINTENANCE_STALE_AFTER_HOURS`. A scheduler that silently stopped is
+   otherwise indistinguishable from one that keeps finding nothing wrong.
+
+Note that `/actuator/**` requires the `ADMIN` role in this deployment, so a
+external monitor needs admin credentials (or its own exposure rule) to read it.
+
+### Manual runs
+
+```bash
+# sweep now (also updates health and alerts, exactly like the scheduled run)
+curl -s -X POST -b cookies -H "X-XSRF-TOKEN: $TOKEN" \
+  http://localhost:8080/api/admin/storage/verify
+
+# retention now; days=0 expires every superseded version
+curl -s -X POST -b cookies -H "X-XSRF-TOKEN: $TOKEN" \
+  "http://localhost:8080/api/admin/storage/retention?days=0"
+
+# what ran, when, and with which trigger
+curl -s -b cookies http://localhost:8080/api/admin/storage/maintenance/status
+```
+
+---
+
 ## 6. Backup & Disaster Recovery
 
 PostgreSQL holds the document rows and the audit chain; MinIO holds the bytes
