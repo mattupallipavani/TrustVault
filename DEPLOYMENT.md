@@ -51,6 +51,54 @@ The deployment topology consists of 4 isolated containerized services connected 
 
 ---
 
+## 3a. Migrating existing MySQL data (one-time cutover)
+
+Older deployments of TrustVault stored data in MySQL 8. PostgreSQL is the
+supported database from Phase 2 onward, and `db/migrate-mysql-to-postgres.sh`
+performs the cutover without losing users, permissions, documents or audit
+history.
+
+1. Start PostgreSQL and let Flyway build the schema:
+   ```bash
+   createdb -O trustvault_app trustvault_db
+   DB_URL=jdbc:postgresql://localhost:5432/trustvault_db ./mvnw spring-boot:run
+   ```
+   Stop the application once `Successfully applied ... migrations` is logged.
+
+2. Run the migration (MySQL is only read, never modified):
+   ```bash
+   MYSQL_PWD='<mysql-root-password>' PGPASSWORD='<pg-password>' \
+     ./db/migrate-mysql-to-postgres.sh
+   ```
+
+   The script refuses to run against a non-empty target, refuses if any value is
+the literal string `NULL`, imports with primary keys intact, advances every
+identity sequence, points `audit_chain_anchor` at the imported chain head, and
+aborts unless every table compares byte-for-byte after import.
+
+3. Start the application against PostgreSQL and verify:
+   ```bash
+   curl -s localhost:8080/api/health
+   # signed in as ADMIN:
+   curl -s -b cookies localhost:8080/api/admin/audit/verify
+   # -> {"valid":true,...}
+   ```
+
+4. Keep the MySQL database untouched until the audit chain verifies and a
+document download succeeds for every owner. It is the rollback.
+
+**What is deliberately not migrated:** `document_share_restrictions` (zero rows,
+no entity, no endpoint - an unimplemented feature) and
+`document_permissions.share_privilege` (empty in every row, referenced nowhere;
+dropped by `V2__reconcile_schema_drift.sql`).
+
+Document bytes are **not** in the database. Point `STORAGE_TYPE=local` at the
+existing `trustvault-storage` directory, or upload the files into MinIO, and
+confirm `documents.storage_key` resolves for each row - the download path
+verifies the stored SHA-256 against `documents.content_hash`.
+
+---
+
 ## 4. Deployment Execution
 
 Start the complete infrastructure with health-checked dependency ordering:

@@ -33,11 +33,6 @@ public class DocumentPermission {
     @Column(nullable = false, length = 20)
     private String permission;
 
-    // Legacy/non-null database column retained for schema compatibility.
-    // Current sharing restrictions are stored separately in document_share_restrictions.
-    @Column(name = "share_privilege", nullable = false, length = 20)
-    private String sharePrivilege = "";
-
     @Column(nullable = false, updatable = false)
     private LocalDateTime grantedAt;
 
@@ -48,9 +43,6 @@ public class DocumentPermission {
     protected void onCreate() {
         if (grantedAt == null) {
             grantedAt = LocalDateTime.now();
-        }
-        if (sharePrivilege == null) {
-            sharePrivilege = "";
         }
     }
 
@@ -80,14 +72,6 @@ public class DocumentPermission {
 
     public void setPermission(String permission) {
         this.permission = permission;
-    }
-
-    public String getSharePrivilege() {
-        return sharePrivilege;
-    }
-
-    public void setSharePrivilege(String sharePrivilege) {
-        this.sharePrivilege = sharePrivilege;
     }
 
     public LocalDateTime getGrantedAt() {
