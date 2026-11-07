@@ -1,0 +1,90 @@
+name: TrustVault Enterprise CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  build-and-test:
+    name: Build, Test & Security Verification
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: trustvault_db
+          POSTGRES_USER: trustvault_app
+          POSTGRES_PASSWORD: ci_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Set up JDK 21 LTS
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: 3. Compile Source Code
+        run: ./mvnw -B compile
+
+      - name: 4. Execute Unit and Integration Tests
+        env:
+          DB_URL: jdbc:postgresql://localhost:5432/trustvault_db
+          DB_USERNAME: trustvault_app
+          DB_PASSWORD: ci_test_password
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          STORAGE_TYPE: local
+        run: ./mvnw -B test
+
+      - name: 5. Generate and Archive Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-test-reports
+          path: target/surefire-reports/
+
+      - name: 6. Package Production Application Artifact
+        run: ./mvnw -B package -DskipTests
+
+      - name: 7. Build Docker Image
+        run: |
+          docker build -t trustvault:latest .
+
+      - name: 8. Scan Docker Image for Vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'trustvault:latest'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+

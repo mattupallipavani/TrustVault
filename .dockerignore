@@ -1,0 +1,12 @@
+target/
+.git/
+.mvn/wrapper/maven-wrapper.jar
+.env
+*.log
+trustvault-storage/
+.vscode/
+.freebuff/
+.DS_Store
+*.md
+!README.md
+
