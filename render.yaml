@@ -3,7 +3,7 @@ services:
     name: trustvault
     runtime: docker
     plan: free
-    region: oregon
+    region: ohio
     healthCheckPath: /actuator/health
     autoDeploy: true
     envVars:
