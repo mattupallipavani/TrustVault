@@ -50,7 +50,7 @@ public class AuthAuditHandlers {
         return (request, response, authentication) -> {
 
             String email = authentication.getName();
-            User user = userRepository.findByEmail(email).orElse(null);
+            User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
 
             safeAudit(() -> auditLogService.standalone(
                     AuditEvent.byEmail("LOGIN",
@@ -87,7 +87,7 @@ public class AuthAuditHandlers {
 
             if (authentication != null) {
                 String email = authentication.getName();
-                User user = userRepository.findByEmail(email).orElse(null);
+                User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
 
                 safeAudit(() -> auditLogService.standalone(
                         AuditEvent.byEmail("LOGOUT",

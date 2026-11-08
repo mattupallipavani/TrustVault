@@ -32,7 +32,7 @@ public class CurrentUserService {
 
         String email = authentication.getName();
 
-        return userRepository.findByEmail(email)
+        return userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new AccessDeniedException(
                         "Authentication required"));
     }

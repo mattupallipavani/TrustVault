@@ -66,11 +66,20 @@ public class AuditLogService {
     public List<AuditLog> search(String action, String outcome, Long documentId,
                                  String actorEmail, LocalDateTime from,
                                  LocalDateTime to) {
+        String cleanAction = blankToNull(action);
+        String cleanOutcome = blankToNull(outcome);
+        String cleanActorEmail = blankToNull(actorEmail);
+
+        if (cleanAction == null && cleanOutcome == null && documentId == null
+                && cleanActorEmail == null && from == null && to == null) {
+            return auditLogRepository.findAllByOrderByIdDesc();
+        }
+
         return auditLogRepository.search(
-                blankToNull(action),
-                blankToNull(outcome),
+                cleanAction,
+                cleanOutcome,
                 documentId,
-                blankToNull(actorEmail),
+                cleanActorEmail,
                 from,
                 to
         );
@@ -79,11 +88,20 @@ public class AuditLogService {
     public Page<AuditLog> searchPage(String action, String outcome, Long documentId,
                                      String actorEmail, LocalDateTime from,
                                      LocalDateTime to, Pageable pageable) {
+        String cleanAction = blankToNull(action);
+        String cleanOutcome = blankToNull(outcome);
+        String cleanActorEmail = blankToNull(actorEmail);
+
+        if (cleanAction == null && cleanOutcome == null && documentId == null
+                && cleanActorEmail == null && from == null && to == null) {
+            return auditLogRepository.findAllByOrderByIdDesc(pageable);
+        }
+
         return auditLogRepository.searchPage(
-                blankToNull(action),
-                blankToNull(outcome),
+                cleanAction,
+                cleanOutcome,
                 documentId,
-                blankToNull(actorEmail),
+                cleanActorEmail,
                 from,
                 to,
                 pageable

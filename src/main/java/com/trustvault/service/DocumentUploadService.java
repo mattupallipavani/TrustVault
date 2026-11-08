@@ -44,10 +44,10 @@ public class DocumentUploadService {
                                                  String category,
                                                  User owner) throws IOException {
 
-        if (owner.getRole() == Role.VIEWER) {
+        if (owner.getRole() != Role.OWNER) {
             auditLogService.denied(AuditEvent.by("UPLOAD", owner)
-                    .details("VIEWER role cannot upload documents"));
-            throw new AccessDeniedException("Viewers cannot upload documents");
+                    .details(owner.getRole() + " role cannot upload documents"));
+            throw new AccessDeniedException("Only Document Owners can upload documents");
         }
 
         String trimmedCategory = validateCategory(category);

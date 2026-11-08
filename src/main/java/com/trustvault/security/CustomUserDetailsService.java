@@ -22,7 +22,9 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email)
             throws UsernameNotFoundException {
 
-        User user = userRepository.findByEmail(email)
+        String normalized = email == null ? "" : email.trim().toLowerCase(java.util.Locale.ROOT);
+
+        User user = userRepository.findByEmailIgnoreCase(normalized)
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "User not found"));
 

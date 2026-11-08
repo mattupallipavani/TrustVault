@@ -60,7 +60,7 @@ public class UserService {
 
         String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
 
-        if (userRepository.existsByEmail(email)) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new ConflictException("Email is already registered");
         }
 
@@ -88,7 +88,7 @@ public class UserService {
                 ? ""
                 : email.trim().toLowerCase(Locale.ROOT);
 
-        userRepository.findByEmail(normalized).ifPresent(user ->
+        userRepository.findByEmailIgnoreCase(normalized).ifPresent(user ->
                 auditLogService.success(
                         AuditEvent.by("PASSWORD_RESET_REQUESTED", user)
                                 .target(user)
@@ -163,7 +163,7 @@ public class UserService {
     }
 
     public User requireByEmail(String email) {
-        return userRepository.findByEmail(email)
+        return userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
@@ -180,7 +180,7 @@ public class UserService {
             throw new IllegalArgumentException("Email is required");
         }
 
-        User user = userRepository.findByEmail(email.trim().toLowerCase(Locale.ROOT))
+        User user = userRepository.findByEmailIgnoreCase(email.trim())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         return toResponse(user);

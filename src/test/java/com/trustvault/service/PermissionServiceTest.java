@@ -58,10 +58,12 @@ class PermissionServiceTest {
         owner = new User();
         owner.setId(OWNER_ID);
         owner.setEmail("owner@trustvault.local");
+        owner.setRole(com.trustvault.enums.Role.OWNER);
 
         other = new User();
         other.setId(OTHER_ID);
         other.setEmail("other@trustvault.local");
+        other.setRole(com.trustvault.enums.Role.VIEWER);
     }
 
     @Test

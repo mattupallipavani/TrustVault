@@ -158,6 +158,11 @@ public class PermissionService {
     public void grantPermission(Long documentId, User actor,
                                 Long targetUserId, String permissionType) {
 
+        if (actor.getRole() != com.trustvault.enums.Role.OWNER) {
+            deny(actor, load(documentId), "GRANT_PERMISSION",
+                    "Only Document Owners can share documents");
+        }
+
         Document document = requireOwner(documentId, actor);
         PermissionLevel level = PermissionLevel.parse(permissionType);
 
@@ -192,6 +197,11 @@ public class PermissionService {
 
     @Transactional
     public void revokePermission(Long documentId, User actor, Long targetUserId) {
+
+        if (actor.getRole() != com.trustvault.enums.Role.OWNER) {
+            deny(actor, load(documentId), "REVOKE_PERMISSION",
+                    "Only Document Owners can manage document permissions");
+        }
 
         Document document = requireOwner(documentId, actor);
 

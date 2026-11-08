@@ -22,14 +22,18 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     List<AuditLog> findByActorUserIdOrderByIdDesc(Long actorUserId);
 
+    List<AuditLog> findAllByOrderByIdDesc();
+
+    Page<AuditLog> findAllByOrderByIdDesc(Pageable pageable);
+
     @Query("""
             select a from AuditLog a
             where (cast(:action as String) is null or a.action = :action)
               and (cast(:outcome as String) is null or a.outcome = :outcome)
-              and (:documentId is null or a.documentId = :documentId)
+              and (cast(:documentId as Long) is null or a.documentId = :documentId)
               and (cast(:actorEmail as String) is null or lower(a.actorEmail) = lower(cast(:actorEmail as String)))
-              and (:from is null or a.createdAt >= :from)
-              and (:to is null or a.createdAt <= :to)
+              and (cast(:from as LocalDateTime) is null or a.createdAt >= :from)
+              and (cast(:to as LocalDateTime) is null or a.createdAt <= :to)
             order by a.id desc
             """)
     List<AuditLog> search(
@@ -45,10 +49,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
             select a from AuditLog a
             where (cast(:action as String) is null or a.action = :action)
               and (cast(:outcome as String) is null or a.outcome = :outcome)
-              and (:documentId is null or a.documentId = :documentId)
+              and (cast(:documentId as Long) is null or a.documentId = :documentId)
               and (cast(:actorEmail as String) is null or lower(a.actorEmail) = lower(cast(:actorEmail as String)))
-              and (:from is null or a.createdAt >= :from)
-              and (:to is null or a.createdAt <= :to)
+              and (cast(:from as LocalDateTime) is null or a.createdAt >= :from)
+              and (cast(:to as LocalDateTime) is null or a.createdAt <= :to)
             order by a.id desc
             """)
     Page<AuditLog> searchPage(

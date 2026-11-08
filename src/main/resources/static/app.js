@@ -237,11 +237,17 @@ async function showApp() {
     $('sessionEmail').textContent = state.me.email;
     $('sessionRole').textContent = state.me.role;
 
-    // The audit and people tabs are offered to administrators only. The
-    // server enforces it regardless of what the browser shows.
+    // Role-based UI visibility
     const isAdmin = state.me.role === 'ADMIN';
+    const isOwner = state.me.role === 'OWNER';
     $('adminTab').hidden = !isAdmin;
     $('peopleTab').hidden = !isAdmin;
+    if ($('uploadCard')) {
+        $('uploadCard').hidden = !isOwner;
+    }
+    if ($('sharePanel') && !isOwner) {
+        $('sharePanel').hidden = true;
+    }
 
     showPanel('documents');
     await loadDocuments();
@@ -315,8 +321,10 @@ function renderDocuments() {
 }
 
 function renderDocumentRow(document) {
-    const isOwner = document.accessLevel === 'OWNER';
-    const canEdit = isOwner || document.accessLevel === 'EDIT';
+    const isOwnerRole = state.me && state.me.role === 'OWNER';
+    const isAdminRole = state.me && state.me.role === 'ADMIN';
+    const isDocOwner = document.accessLevel === 'OWNER';
+    const canEdit = isDocOwner || document.accessLevel === 'EDIT';
 
     const actions = element('div', { className: 'row-actions' });
 
@@ -331,7 +339,7 @@ function renderDocumentRow(document) {
     download.href = '/api/documents/' + document.id + '/download';
     actions.appendChild(download);
 
-    if (isOwner) {
+    if (isOwnerRole && isDocOwner) {
         actions.appendChild(element('button', {
             text: 'Share',
             className: 'small ghost',
@@ -339,7 +347,7 @@ function renderDocumentRow(document) {
         }));
     }
 
-    if (canEdit) {
+    if (canEdit && !isAdminRole) {
         actions.appendChild(element('button', {
             text: 'Rename',
             className: 'small ghost',
@@ -347,7 +355,7 @@ function renderDocumentRow(document) {
         }));
     }
 
-    if (isOwner) {
+    if (isDocOwner && isOwnerRole) {
         actions.appendChild(element('button', {
             text: 'Delete',
             className: 'small danger',
@@ -842,7 +850,7 @@ function wire() {
         } catch (error) {
             setMessage('loginError',
                 error.status === 401
-                    ? 'That email and password do not match an account.'
+                    ? 'Invalid email or password. Please verify your password or reset it below.'
                     : error.message);
             $('loginPassword').select();
         } finally {

@@ -131,6 +131,15 @@
                             Create an account
                         </button>
                     </p>
+
+                    <div class="auth-demo-hint" style="margin-top: 1rem; padding: 0.75rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; font-size: 0.8rem; color: #94a3b8;">
+                        <strong style="color: #e2e8f0;">Demo Accounts (Password: <code>TrustVault#2026</code>)</strong>
+                        <ul style="margin: 0.35rem 0 0 1.2rem; padding: 0;">
+                            <li><code>admin@trustvault.local</code> (Admin: Audit Logs & Users)</li>
+                            <li><code>owner@trustvault.local</code> (Owner: Upload & Share)</li>
+                            <li><code>viewer@trustvault.local</code> (Viewer: View & Download)</li>
+                        </ul>
+                    </div>
                 </form>
 
                 <!-- Register ------------------------------------------------- -->
@@ -227,7 +236,7 @@
             <!-- Documents -------------------------------------------------- -->
             <section id="documentsPanel">
 
-                <section class="card">
+                <section class="card" id="uploadCard">
                     <h2>Upload a document</h2>
                     <form id="uploadForm" class="inline">
                         <label for="uploadFile">File</label>
