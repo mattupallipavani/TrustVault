@@ -799,6 +799,20 @@ async function loadAudit() {
     renderAudit(entries);
 }
 
+function exportAudit() {
+    const params = new URLSearchParams();
+    const action = $('auditAction').value;
+    const outcome = $('auditOutcome').value;
+    const actor = $('auditActor').value.trim();
+
+    if (action) params.set('action', action);
+    if (outcome) params.set('outcome', outcome);
+    if (actor) params.set('actorEmail', actor);
+
+    const suffix = params.toString() ? '?' + params.toString() : '';
+    window.location.href = '/api/admin/audit/export' + suffix;
+}
+
 function renderAudit(entries) {
     const rows = $('auditRows');
     rows.replaceChildren();
@@ -1209,6 +1223,9 @@ function wire() {
     /* Admin --------------------------------------------------------- */
 
     $('verifyButton').addEventListener('click', verifyChain);
+    if ($('exportAuditButton')) {
+        $('exportAuditButton').addEventListener('click', exportAudit);
+    }
 
     $('auditFilterForm').addEventListener('submit', async (event) => {
         event.preventDefault();

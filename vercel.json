@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://trustvault-hzkq.onrender.com/api/:path*"
+    },
+    {
+      "source": "/actuator/:path*",
+      "destination": "https://trustvault-hzkq.onrender.com/actuator/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/src/main/resources/static/$1"
+    }
+  ]
+}

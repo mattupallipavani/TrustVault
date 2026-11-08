@@ -87,6 +87,52 @@ public class AdminAuditController {
     }
 
     /**
+     * Exports filtered audit log records as a signed CSV report for compliance audits.
+     */
+    @GetMapping(value = "/audit/export", produces = "text/csv")
+    public ResponseEntity<byte[]> exportAuditLogsCsv(
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String outcome,
+            @RequestParam(required = false) Long documentId,
+            @RequestParam(required = false) String actorEmail,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime to) {
+
+        List<AuditLog> logs = auditLogService.search(action, outcome, documentId, actorEmail, from, to);
+        StringBuilder csv = new StringBuilder();
+        csv.append("ID,Timestamp,Actor Email,Action,Document ID,Outcome,SHA-256 Hash,Previous Hash\n");
+
+        for (AuditLog log : logs) {
+            csv.append(log.getId()).append(",")
+               .append(escapeCsv(log.getCreatedAt() != null ? log.getCreatedAt().toString() : "")).append(",")
+               .append(escapeCsv(log.getActorEmail())).append(",")
+               .append(escapeCsv(log.getAction())).append(",")
+               .append(log.getDocumentId() != null ? log.getDocumentId() : "").append(",")
+               .append(escapeCsv(log.getOutcome())).append(",")
+               .append(escapeCsv(log.getEntryHash())).append(",")
+               .append(escapeCsv(log.getPreviousHash())).append("\n");
+        }
+
+        byte[] bytes = csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"trustvault-audit-ledger.csv\"")
+                .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, "text/csv; charset=UTF-8")
+                .body(bytes);
+    }
+
+    private String escapeCsv(String value) {
+        if (value == null) return "";
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
+
+    /**
      * Summary counters for the admin dashboard. Denied attempts are surfaced
      * prominently because a cluster of them is the signal worth noticing.
      */
