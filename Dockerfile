@@ -28,8 +28,8 @@ RUN apk add --no-cache curl
 # Create non-root system group and user
 RUN addgroup -S -g 10001 trustvault && \
     adduser -S -u 10001 -G trustvault -h /app trustvault && \
-    mkdir -p /data /tmp/trustvault && \
-    chown -R trustvault:trustvault /app /data /tmp/trustvault
+    mkdir -p /data /app/trustvault-storage /tmp/trustvault && \
+    chown -R trustvault:trustvault /app /data /app/trustvault-storage /tmp/trustvault
 
 COPY --from=build --chown=trustvault:trustvault /app/target/*.jar /app/app.jar
 
