@@ -16,13 +16,9 @@ services:
       - key: DB_PASSWORD
         sync: false
       - key: STORAGE_TYPE
-        value: supabase
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_KEY
-        sync: false
-      - key: SUPABASE_BUCKET
-        value: trustvault-documents
+        value: local
+      - key: STORAGE_LOCATION
+        value: /app/trustvault-storage
       - key: DEMO_PASSWORD
         sync: false
       - key: SESSION_COOKIE_SECURE
