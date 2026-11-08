@@ -378,11 +378,26 @@ This architecture achieves **100% free hosting (₹0.00)** with no credit cards,
 3. Select **Build and deploy from a Git repository** and pick `mattupallipavani/TrustVault`.
 4. Configure service settings:
    * **Name:** `trustvault`
-   * **Region:** Same region as your Supabase project (e.g. Oregon, Frankfurt, Singapore).
+   * **Region:** **Ohio (US East)** (colocated with Neon `us-east-2` for lowest latency)
    * **Branch:** `main`
    * **Runtime:** **Docker**
    * **Instance Type:** **Free** (512 MB RAM, 0.1 CPU, ₹0/month)
 5. Add the following **Environment Variables** in Render:
+
+#### With Neon PostgreSQL + Local Storage (100% Free, Zero External Dependencies):
+
+| Key | Value | Notes |
+| :--- | :--- | :--- |
+| `DB_URL` | `jdbc:postgresql://ep-summer-art-beax4drq-pooler.c-9.us-east-2.aws.neon.tech:5432/neondb?sslmode=require` | Neon PostgreSQL (Pooled or Direct) |
+| `DB_USERNAME` | `neondb_owner` | Neon database username |
+| `DB_PASSWORD` | `npg_ofCKBmRgd97V` | Neon database password |
+| `STORAGE_TYPE` | `local` | Uses container local disk (₹0, no cloud storage needed) |
+| `STORAGE_LOCATION` | `/app/trustvault-storage` | Container storage path |
+| `DEMO_PASSWORD` | `TrustVault#2026` | Seed account password |
+| `SESSION_COOKIE_SECURE` | `true` | Enforces HTTPS session cookies on Render |
+| `MANAGEMENT_HEALTH_REDIS_ENABLED` | `false` | Keeps Actuator healthy without Redis |
+
+#### Alternative: With Supabase:
 
 | Key | Value | Notes |
 | :--- | :--- | :--- |
