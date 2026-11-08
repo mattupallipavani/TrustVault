@@ -34,6 +34,28 @@ public class DocumentSearchService {
 
     public List<DocumentListResponse> search(DocumentQuery query, User actor) {
 
+        if (actor.getRole() == com.trustvault.enums.Role.ADMIN) {
+            String kw = blankToNull(query.keyword());
+            String cat = blankToNull(query.category());
+            String own = normalizeOwner(query.owner());
+
+            List<Document> all = documentRepository.findAll(
+                    org.springframework.data.domain.Sort.by(
+                            org.springframework.data.domain.Sort.Direction.DESC, "uploadedAt", "id"));
+
+            List<Document> filtered = all.stream()
+                    .filter(d -> kw == null
+                            || d.getFileName().toLowerCase(Locale.ROOT).contains(kw.toLowerCase(Locale.ROOT))
+                            || d.getCategory().toLowerCase(Locale.ROOT).contains(kw.toLowerCase(Locale.ROOT)))
+                    .filter(d -> cat == null || d.getCategory().equalsIgnoreCase(cat))
+                    .filter(d -> own == null || d.getOwnerEmail().equalsIgnoreCase(own))
+                    .filter(d -> query.from() == null || !d.getUploadedAt().isBefore(query.from()))
+                    .filter(d -> query.to() == null || !d.getUploadedAt().isAfter(query.to()))
+                    .toList();
+
+            return documentListService.toResponses(filtered, actor);
+        }
+
         boolean ownedOnly = "owned".equalsIgnoreCase(query.scope());
         boolean sharedOnly = "shared".equalsIgnoreCase(query.scope());
 

@@ -245,7 +245,7 @@ async function showApp() {
     if ($('uploadCard')) {
         $('uploadCard').hidden = !isOwner;
     }
-    if ($('sharePanel') && !isOwner) {
+    if ($('sharePanel') && !isOwner && !isAdmin) {
         $('sharePanel').hidden = true;
     }
 
@@ -328,20 +328,22 @@ function renderDocumentRow(document) {
 
     const actions = element('div', { className: 'row-actions' });
 
-    const download = element('a', {
-        className: 'button small',
-        text: 'Download',
-        onClick: (event) => {
-            event.preventDefault();
-            downloadDocument(document);
-        }
-    });
-    download.href = '/api/documents/' + document.id + '/download';
-    actions.appendChild(download);
+    if (!isAdminRole) {
+        const download = element('a', {
+            className: 'button small',
+            text: 'Download',
+            onClick: (event) => {
+                event.preventDefault();
+                downloadDocument(document);
+            }
+        });
+        download.href = '/api/documents/' + document.id + '/download';
+        actions.appendChild(download);
+    }
 
-    if (isOwnerRole && isDocOwner) {
+    if ((isOwnerRole && isDocOwner) || isAdminRole) {
         actions.appendChild(element('button', {
-            text: 'Share',
+            text: isAdminRole ? 'Adjust Restrictions' : 'Share',
             className: 'small ghost',
             onClick: () => openShare(document)
         }));
@@ -488,6 +490,11 @@ async function openShare(document) {
     $('sharePanel').hidden = false;
     $('shareDocumentName').textContent = document.fileName;
     $('shareEmail').value = '';
+
+    const isAdmin = state.me && state.me.role === 'ADMIN';
+    if ($('shareSubmitBtn')) {
+        $('shareSubmitBtn').textContent = isAdmin ? 'Adjust / Grant' : 'Grant';
+    }
 
     await loadGrants();
     $('sharePanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });

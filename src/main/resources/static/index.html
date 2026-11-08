@@ -333,7 +333,7 @@
                 </section>
 
                 <section class="card" id="sharePanel" hidden>
-                    <h2>Share "<span id="shareDocumentName"></span>"</h2>
+                    <h2 id="sharePanelTitle">Share "<span id="shareDocumentName"></span>"</h2>
 
                     <form id="shareForm" class="inline">
                         <label for="shareEmail">Email address</label>
@@ -346,7 +346,7 @@
                             <option value="EDIT">Can edit</option>
                         </select>
 
-                        <button type="submit">Grant</button>
+                        <button type="submit" id="shareSubmitBtn">Grant</button>
                     </form>
 
                     <ul class="grant-list" id="grantList"></ul>

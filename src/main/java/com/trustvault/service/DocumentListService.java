@@ -38,14 +38,24 @@ public class DocumentListService {
     }
 
     public List<DocumentListResponse> list(User actor) {
-        List<Document> documents =
-                documentRepository.findAccessibleByUser(actor.getId());
+        List<Document> documents;
+        if (actor.getRole() == com.trustvault.enums.Role.ADMIN) {
+            documents = documentRepository.findAll(
+                    org.springframework.data.domain.Sort.by(
+                            org.springframework.data.domain.Sort.Direction.DESC, "uploadedAt", "id"));
+        } else {
+            documents = documentRepository.findAccessibleByUser(actor.getId());
+        }
         return toResponses(documents, actor);
     }
 
     public Page<DocumentListResponse> listPaged(User actor, Pageable pageable) {
-        Page<Document> documents =
-                documentRepository.findAccessibleByUserPage(actor.getId(), pageable);
+        Page<Document> documents;
+        if (actor.getRole() == com.trustvault.enums.Role.ADMIN) {
+            documents = documentRepository.findAll(pageable);
+        } else {
+            documents = documentRepository.findAccessibleByUserPage(actor.getId(), pageable);
+        }
 
         Map<Long, String> grantedLevels = new HashMap<>();
         for (DocumentPermission permission : permissionRepository.findByUserId(actor.getId())) {
@@ -79,7 +89,9 @@ public class DocumentListService {
 
         String accessLevel;
 
-        if (document.getOwnerId().equals(actor.getId())) {
+        if (actor.getRole() == com.trustvault.enums.Role.ADMIN) {
+            accessLevel = "ADMIN";
+        } else if (document.getOwnerId().equals(actor.getId())) {
             accessLevel = "OWNER";
         } else {
             accessLevel = grantedLevels.getOrDefault(document.getId(), "NONE");

@@ -26,7 +26,7 @@ Upload confidential contracts, employee records, financial reports, and sensitiv
 
 | Role | Permitted Actions | Prohibited Actions |
 | :--- | :--- | :--- |
-| `ADMIN` | Read audit trail, verify hash chain integrity, list users, change roles, trigger temporary password resets. | Read document content, grant or revoke document access. |
+| `ADMIN` | Read audit trail, verify hash chain integrity, list users, change roles, trigger temporary password resets. | Read document content, upload documents, grant or revoke document access. |
 | `OWNER` | Upload documents, own files, grant/revoke permissions, edit metadata, delete owned files. | Read ungranted documents belonging to another user. |
 | `VIEWER` | Read and download documents explicitly granted to the account. | Upload documents, grant access, access unshared documents. |
 

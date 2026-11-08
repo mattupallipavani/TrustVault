@@ -173,6 +173,55 @@ class PermissionServiceTest {
         assertFalse(permissionService.canEdit(DOCUMENT_ID, OTHER_ID));
     }
 
+    @Test
+    void adminCanAdjustRestrictionsAndGrantPermission() {
+        User admin = new User();
+        admin.setId(999L);
+        admin.setEmail("admin@trustvault.local");
+        admin.setRole(com.trustvault.enums.Role.ADMIN);
+
+        when(documentRepository.findById(DOCUMENT_ID))
+                .thenReturn(Optional.of(document));
+        when(userRepository.findById(OTHER_ID))
+                .thenReturn(Optional.of(other));
+        when(permissionRepository.findByDocumentIdAndUserId(DOCUMENT_ID, OTHER_ID))
+                .thenReturn(Optional.empty());
+
+        permissionService.grantPermission(DOCUMENT_ID, admin, OTHER_ID, "READ");
+
+        verify(permissionRepository).save(any());
+        verify(auditLogService).success(any());
+    }
+
+    @Test
+    void adminCanRevokePermissionRestriction() {
+        User admin = new User();
+        admin.setId(999L);
+        admin.setEmail("admin@trustvault.local");
+        admin.setRole(com.trustvault.enums.Role.ADMIN);
+
+        when(documentRepository.findById(DOCUMENT_ID))
+                .thenReturn(Optional.of(document));
+        when(userRepository.findById(OTHER_ID))
+                .thenReturn(Optional.of(other));
+        when(permissionRepository.deleteForDocumentAndUser(DOCUMENT_ID, OTHER_ID))
+                .thenReturn(1);
+
+        permissionService.revokePermission(DOCUMENT_ID, admin, OTHER_ID);
+
+        verify(permissionRepository).deleteForDocumentAndUser(DOCUMENT_ID, OTHER_ID);
+        verify(auditLogService).success(any());
+    }
+
+    @Test
+    void viewerCannotAdjustRestrictions() {
+        when(documentRepository.findById(DOCUMENT_ID))
+                .thenReturn(Optional.of(document));
+
+        assertThrows(AccessDeniedException.class,
+                () -> permissionService.grantPermission(DOCUMENT_ID, other, 777L, "READ"));
+    }
+
     private DocumentPermission grant(String level) {
         DocumentPermission permission = new DocumentPermission();
         permission.setDocument(document);

@@ -84,6 +84,15 @@ public class PermissionService {
         return document;
     }
 
+    public Document requireOwnerOrAdmin(Long documentId, User actor) {
+        Document document = load(documentId);
+        if (!isOwner(document, actor.getId()) && actor.getRole() != com.trustvault.enums.Role.ADMIN) {
+            deny(actor, document, "PERMISSION_MANAGEMENT",
+                    "Only the Document Owner or an Administrator can adjust document restrictions");
+        }
+        return document;
+    }
+
     // ------------------------------------------------------------------
     // Predicates
     // ------------------------------------------------------------------
@@ -158,19 +167,14 @@ public class PermissionService {
     public void grantPermission(Long documentId, User actor,
                                 Long targetUserId, String permissionType) {
 
-        if (actor.getRole() != com.trustvault.enums.Role.OWNER) {
-            deny(actor, load(documentId), "GRANT_PERMISSION",
-                    "Only Document Owners can share documents");
-        }
-
-        Document document = requireOwner(documentId, actor);
+        Document document = requireOwnerOrAdmin(documentId, actor);
         PermissionLevel level = PermissionLevel.parse(permissionType);
 
         if (targetUserId == null) {
             throw new IllegalArgumentException("Target user is required");
         }
 
-        if (targetUserId.equals(actor.getId())) {
+        if (targetUserId.equals(document.getOwnerId())) {
             throw new IllegalArgumentException(
                     "The owner already has full access to this document");
         }
@@ -188,39 +192,42 @@ public class PermissionService {
 
         permissionRepository.save(permission);
 
+        String prefix = actor.getRole() == com.trustvault.enums.Role.ADMIN
+                ? "Administrator adjusted restriction: Granted "
+                : "Granted ";
+
         auditLogService.success(AuditEvent.by("GRANT_PERMISSION", actor)
                 .document(document)
                 .target(target)
-                .details("Granted " + level.name()
+                .details(prefix + level.name()
                         + " to " + target.getEmail()));
     }
 
     @Transactional
     public void revokePermission(Long documentId, User actor, Long targetUserId) {
 
-        if (actor.getRole() != com.trustvault.enums.Role.OWNER) {
-            deny(actor, load(documentId), "REVOKE_PERMISSION",
-                    "Only Document Owners can manage document permissions");
-        }
-
-        Document document = requireOwner(documentId, actor);
+        Document document = requireOwnerOrAdmin(documentId, actor);
 
         User target = userRepository.findById(targetUserId).orElse(null);
 
         int removed = permissionRepository
                 .deleteForDocumentAndUser(documentId, targetUserId);
 
+        String prefix = actor.getRole() == com.trustvault.enums.Role.ADMIN
+                ? "Administrator adjusted restriction: Access revoked"
+                : "Access revoked";
+
         auditLogService.success(AuditEvent.by("REVOKE_PERMISSION", actor)
                 .document(document)
                 .targetId(targetUserId,
                         target == null ? null : target.getEmail())
                 .details(removed > 0
-                        ? "Access revoked"
+                        ? prefix
                         : "Revoke requested but the user had no grant"));
     }
 
     /**
-     * Owner-only listing of the current grants.
+     * Owner or Administrator listing of the current grants.
      *
      * Read inside a transaction: {@code user} on a grant is a lazy association
      * and open-in-view is off, so mapping the response after the repository
@@ -230,7 +237,7 @@ public class PermissionService {
     @Transactional(readOnly = true)
     public List<PermissionResponse> listPermissions(Long documentId, User actor) {
 
-        Document document = requireOwner(documentId, actor);
+        Document document = requireOwnerOrAdmin(documentId, actor);
 
         List<DocumentPermission> permissions =
                 permissionRepository.findByDocumentId(document.getId());
