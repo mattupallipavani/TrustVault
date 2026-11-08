@@ -6,13 +6,14 @@ FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
 
 # Cache Maven wrapper and dependencies
+ENV MAVEN_OPTS="-Xmx512m -XX:+UseSerialGC"
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN chmod +x mvnw && ./mvnw -B dependency:go-offline
+RUN chmod +x mvnw && ./mvnw -B dependency:resolve
 
 # Compile and package application jar
 COPY src/ src/
-RUN ./mvnw -B -DskipTests clean package
+RUN ./mvnw -B -DskipTests package
 
 # ---------------------------------------------------------------------------
 # Runtime Stage
@@ -40,7 +41,7 @@ ENV STORAGE_LOCATION=/data \
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
   CMD curl -f http://localhost:${PORT:-8080}/actuator/health || exit 1
 
 STOPSIGNAL SIGTERM
