@@ -8,6 +8,7 @@ import com.trustvault.enums.PermissionLevel;
 import com.trustvault.exception.ResourceNotFoundException;
 import com.trustvault.repository.DocumentPermissionRepository;
 import com.trustvault.repository.DocumentRepository;
+import com.trustvault.repository.SharingRestrictionRepository;
 import com.trustvault.repository.UserRepository;
 import com.trustvault.util.AuditEvent;
 
@@ -39,17 +40,20 @@ public class PermissionService {
     private final DocumentRepository documentRepository;
     private final UserRepository userRepository;
     private final DocumentPermissionRepository permissionRepository;
+    private final SharingRestrictionRepository sharingRestrictionRepository;
     private final AuditLogService auditLogService;
 
     public PermissionService(
             DocumentRepository documentRepository,
             UserRepository userRepository,
             DocumentPermissionRepository permissionRepository,
+            SharingRestrictionRepository sharingRestrictionRepository,
             AuditLogService auditLogService) {
 
         this.documentRepository = documentRepository;
         this.userRepository = userRepository;
         this.permissionRepository = permissionRepository;
+        this.sharingRestrictionRepository = sharingRestrictionRepository;
         this.auditLogService = auditLogService;
     }
 
@@ -168,6 +172,16 @@ public class PermissionService {
                                 Long targetUserId, String permissionType) {
 
         Document document = requireOwnerOrAdmin(documentId, actor);
+
+        // Enforce sharing restrictions: if this non-admin user has been
+        // restricted from sharing this document, deny the grant.
+        if (actor.getRole() != com.trustvault.enums.Role.ADMIN
+                && sharingRestrictionRepository.existsByDocumentIdAndRestrictedUserId(
+                        documentId, actor.getId())) {
+            deny(actor, document, "GRANT_PERMISSION",
+                    "User is restricted from sharing this document by an administrator");
+        }
+
         PermissionLevel level = PermissionLevel.parse(permissionType);
 
         if (targetUserId == null) {

@@ -5,6 +5,7 @@ import com.trustvault.entity.DocumentPermission;
 import com.trustvault.entity.User;
 import com.trustvault.repository.DocumentPermissionRepository;
 import com.trustvault.repository.DocumentRepository;
+import com.trustvault.repository.SharingRestrictionRepository;
 import com.trustvault.repository.UserRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,9 @@ class PermissionServiceTest {
 
     @Mock
     private DocumentPermissionRepository permissionRepository;
+
+    @Mock
+    private SharingRestrictionRepository sharingRestrictionRepository;
 
     @Mock
     private AuditLogService auditLogService;
@@ -220,6 +224,39 @@ class PermissionServiceTest {
 
         assertThrows(AccessDeniedException.class,
                 () -> permissionService.grantPermission(DOCUMENT_ID, other, 777L, "READ"));
+    }
+
+    @Test
+    void ownerCannotShareWhenSharingRestricted() {
+        when(documentRepository.findById(DOCUMENT_ID))
+                .thenReturn(Optional.of(document));
+        when(sharingRestrictionRepository.existsByDocumentIdAndRestrictedUserId(
+                DOCUMENT_ID, OWNER_ID))
+                .thenReturn(true);
+
+        assertThrows(AccessDeniedException.class,
+                () -> permissionService.grantPermission(
+                        DOCUMENT_ID, owner, OTHER_ID, "READ"));
+
+        verify(auditLogService).denied(any());
+    }
+
+    @Test
+    void ownerCanShareWhenNotRestricted() {
+        when(documentRepository.findById(DOCUMENT_ID))
+                .thenReturn(Optional.of(document));
+        when(sharingRestrictionRepository.existsByDocumentIdAndRestrictedUserId(
+                DOCUMENT_ID, OWNER_ID))
+                .thenReturn(false);
+        when(userRepository.findById(OTHER_ID))
+                .thenReturn(Optional.of(other));
+        when(permissionRepository.findByDocumentIdAndUserId(DOCUMENT_ID, OTHER_ID))
+                .thenReturn(Optional.empty());
+
+        permissionService.grantPermission(DOCUMENT_ID, owner, OTHER_ID, "READ");
+
+        verify(permissionRepository).save(any());
+        verify(auditLogService).success(any());
     }
 
     private DocumentPermission grant(String level) {

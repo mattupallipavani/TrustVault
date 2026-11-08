@@ -349,7 +349,28 @@
                         <button type="submit" id="shareSubmitBtn">Grant</button>
                     </form>
 
+                    <h3 style="margin-top:1.2rem;">Current access</h3>
                     <ul class="grant-list" id="grantList"></ul>
+
+                    <!-- Admin-only: Sharing restrictions section -->
+                    <div id="restrictionSection" hidden>
+                        <h3 style="margin-top:1.5rem;">Sharing restrictions</h3>
+                        <p class="muted" style="font-size:0.85rem;">
+                            Restrict a user from sharing this document. The user
+                            keeps their current read/edit access but cannot grant
+                            it to others.
+                        </p>
+
+                        <div class="inline" id="restrictionForm">
+                            <label for="restrictEmail">User email to restrict</label>
+                            <input type="email" id="restrictEmail"
+                                   placeholder="owner@trustvault.local">
+                            <button type="button" id="restrictBtn"
+                                    class="small">Restrict from sharing</button>
+                        </div>
+
+                        <ul class="grant-list" id="restrictionList"></ul>
+                    </div>
                 </section>
             </section>
 
@@ -382,6 +403,8 @@
                                 <option value="DELETE">DELETE</option>
                                 <option value="GRANT_PERMISSION">GRANT_PERMISSION</option>
                                 <option value="REVOKE_PERMISSION">REVOKE_PERMISSION</option>
+                                <option value="SHARING_RESTRICTED">SHARING_RESTRICTED</option>
+                                <option value="SHARING_UNRESTRICTED">SHARING_UNRESTRICTED</option>
                                 <option value="PASSWORD_RESET_REQUESTED">PASSWORD_RESET_REQUESTED</option>
                                 <option value="PASSWORD_RESET">PASSWORD_RESET</option>
                                 <option value="ROLE_CHANGE">ROLE_CHANGE</option>

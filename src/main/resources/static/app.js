@@ -343,7 +343,7 @@ function renderDocumentRow(document) {
 
     if ((isOwnerRole && isDocOwner) || isAdminRole) {
         actions.appendChild(element('button', {
-            text: isAdminRole ? 'Adjust Restrictions' : 'Share',
+            text: isAdminRole ? 'Manage' : 'Share',
             className: 'small ghost',
             onClick: () => openShare(document)
         }));
@@ -492,11 +492,36 @@ async function openShare(document) {
     $('shareEmail').value = '';
 
     const isAdmin = state.me && state.me.role === 'ADMIN';
+
+    // Update panel title and button text for admin
+    if ($('sharePanelTitle')) {
+        $('sharePanelTitle').innerHTML = '';
+        $('sharePanelTitle').appendChild(
+            window.document.createTextNode(
+                isAdmin ? 'Manage Restrictions – "' : 'Share "'));
+        const nameSpan = window.document.createElement('span');
+        nameSpan.id = 'shareDocumentName';
+        nameSpan.textContent = document.fileName;
+        $('sharePanelTitle').appendChild(nameSpan);
+        $('sharePanelTitle').appendChild(
+            window.document.createTextNode('"'));
+    }
+
     if ($('shareSubmitBtn')) {
-        $('shareSubmitBtn').textContent = isAdmin ? 'Adjust / Grant' : 'Grant';
+        $('shareSubmitBtn').textContent = isAdmin ? 'Grant access' : 'Grant';
+    }
+
+    // Show/hide the admin restriction section
+    if ($('restrictionSection')) {
+        $('restrictionSection').hidden = !isAdmin;
     }
 
     await loadGrants();
+
+    if (isAdmin) {
+        await loadRestrictions();
+    }
+
     $('sharePanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -508,6 +533,8 @@ function closeShare() {
 async function loadGrants() {
     const list = $('grantList');
     list.replaceChildren();
+
+    const isAdmin = state.me && state.me.role === 'ADMIN';
 
     try {
         const grants = await request(
@@ -523,14 +550,15 @@ async function loadGrants() {
 
         grants.forEach((grant) => {
             const revoke = element('button', {
-                text: 'Revoke',
+                text: isAdmin ? 'Remove person' : 'Revoke',
                 className: 'small danger',
                 onClick: async () => {
                     try {
                         await request('/api/permissions/revoke/'
                             + state.shareDocumentId + '/' + grant.userId,
                         { method: 'DELETE' });
-                        toast('Access revoked', 'success');
+                        toast(isAdmin ? 'Person removed' : 'Access revoked',
+                              'success');
                         await loadGrants();
                     } catch (error) {
                         toast(error.message, 'error');
@@ -576,6 +604,98 @@ async function grantAccess(email, level) {
     $('shareEmail').value = '';
     await loadGrants();
     await loadDocuments();
+}
+
+/* ------------------------------------------------------------------ */
+/* Admin - sharing restrictions                                        */
+/* ------------------------------------------------------------------ */
+
+async function loadRestrictions() {
+    const list = $('restrictionList');
+    if (!list) {
+        return;
+    }
+    list.replaceChildren();
+
+    try {
+        const restrictions = await request(
+            '/api/admin/restrictions/' + state.shareDocumentId);
+
+        if (restrictions.length === 0) {
+            list.appendChild(element('li', {
+                className: 'muted',
+                text: 'No sharing restrictions on this document.'
+            }));
+            return;
+        }
+
+        restrictions.forEach((restriction) => {
+            const removeBtn = element('button', {
+                text: 'Lift restriction',
+                className: 'small ghost',
+                onClick: async () => {
+                    try {
+                        await request('/api/admin/restrictions/'
+                            + state.shareDocumentId + '/'
+                            + restriction.userId,
+                        { method: 'DELETE' });
+                        toast('Sharing restriction lifted for '
+                              + restriction.userEmail, 'success');
+                        await loadRestrictions();
+                    } catch (error) {
+                        toast(error.message, 'error');
+                    }
+                }
+            });
+
+            list.appendChild(element('li', {
+                children: [
+                    element('div', {
+                        children: [
+                            element('strong', {
+                                text: restriction.userFullName
+                            }),
+                            element('span', {
+                                className: 'muted',
+                                text: ' ' + restriction.userEmail
+                            }),
+                            element('span', {
+                                className: 'badge denied',
+                                text: 'SHARING BLOCKED'
+                            })
+                        ]
+                    }),
+                    removeBtn
+                ]
+            }));
+        });
+    } catch (error) {
+        toast(error.message, 'error');
+    }
+}
+
+async function applyRestriction() {
+    const email = $('restrictEmail').value.trim();
+    if (!email) {
+        toast('Enter the email of the user to restrict', 'error');
+        return;
+    }
+
+    try {
+        // Look up the target user by email
+        const target = await request(
+            '/api/users/lookup?email=' + encodeURIComponent(email));
+
+        await request('/api/admin/restrictions/'
+            + state.shareDocumentId + '/' + target.id,
+        { method: 'POST' });
+
+        toast(target.email + ' is now restricted from sharing', 'success');
+        $('restrictEmail').value = '';
+        await loadRestrictions();
+    } catch (error) {
+        toast(error.message, 'error');
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -981,6 +1101,17 @@ function wire() {
             toast(error.message, 'error');
         }
     });
+
+    /* Admin restriction button */
+    if ($('restrictBtn')) {
+        $('restrictBtn').addEventListener('click', async () => {
+            try {
+                await applyRestriction();
+            } catch (error) {
+                toast(error.message, 'error');
+            }
+        });
+    }
 
     /* Admin --------------------------------------------------------- */
 
