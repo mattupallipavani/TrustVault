@@ -236,10 +236,40 @@ async function showApp() {
 
     $('sessionEmail').textContent = state.me.email;
     $('sessionRole').textContent = state.me.role;
+    $('sessionRole').className = 'badge ' + state.me.role.toLowerCase();
 
-    // Role-based UI visibility
+    // Dashboard Hero Context
     const isAdmin = state.me.role === 'ADMIN';
     const isOwner = state.me.role === 'OWNER';
+
+    if ($('dashboardRoleBadge')) {
+        $('dashboardRoleBadge').textContent = state.me.role;
+        $('dashboardRoleBadge').className = 'badge ' + state.me.role.toLowerCase();
+    }
+
+    if ($('dashboardRoleTitle') && $('dashboardRoleDesc')) {
+        if (isAdmin) {
+            $('dashboardRoleTitle').textContent = 'Security Administration Console';
+            $('dashboardRoleDesc').textContent =
+                'Monitor access integrity, enforce document-sharing restrictions, audit historical events, and manage user identities.';
+            if ($('kpiOwnedLabel')) $('kpiOwnedLabel').textContent = 'Vault Assets';
+            if ($('kpiOwnedSub')) $('kpiOwnedSub').textContent = 'Total system documents';
+        } else if (isOwner) {
+            $('dashboardRoleTitle').textContent = 'Enterprise Document Workspace';
+            $('dashboardRoleDesc').textContent =
+                'Securely upload confidential assets, organize security categories, and configure real-time access permissions.';
+            if ($('kpiOwnedLabel')) $('kpiOwnedLabel').textContent = 'Owned Files';
+            if ($('kpiOwnedSub')) $('kpiOwnedSub').textContent = 'Under your ownership';
+        } else {
+            $('dashboardRoleTitle').textContent = 'Secure Document Reader';
+            $('dashboardRoleDesc').textContent =
+                'View and securely download confidential files and records shared with your authorized account.';
+            if ($('kpiOwnedLabel')) $('kpiOwnedLabel').textContent = 'Accessible Files';
+            if ($('kpiOwnedSub')) $('kpiOwnedSub').textContent = 'Available to view';
+        }
+    }
+
+    // Role-based UI visibility
     $('adminTab').hidden = !isAdmin;
     $('peopleTab').hidden = !isAdmin;
     if ($('uploadCard')) {
@@ -309,11 +339,37 @@ function renderDocuments() {
     rows.replaceChildren();
 
     const summary = state.documents.length === 1
-        ? '1 document'
-        : state.documents.length + ' documents';
+        ? '1 document accessible'
+        : state.documents.length + ' documents accessible';
 
     $('documentSummary').textContent = summary;
     $('emptyState').hidden = state.documents.length > 0;
+
+    // Update real-time summary KPI metrics
+    if ($('kpiTotalDocs')) {
+        $('kpiTotalDocs').textContent = state.documents.length;
+    }
+
+    const isAdmin = state.me && state.me.role === 'ADMIN';
+
+    if ($('kpiOwnedDocs')) {
+        const ownedCount = isAdmin
+            ? state.documents.length
+            : state.documents.filter((d) => d.accessLevel === 'OWNER').length;
+        $('kpiOwnedDocs').textContent = ownedCount;
+    }
+
+    if ($('kpiSharedDocs')) {
+        const sharedCount = isAdmin
+            ? state.documents.filter((d) => d.accessLevel !== 'OWNER' && d.accessLevel !== 'ADMIN').length
+            : state.documents.filter((d) => d.accessLevel !== 'OWNER').length;
+        $('kpiSharedDocs').textContent = sharedCount;
+    }
+
+    if ($('kpiTotalStorage')) {
+        const totalBytes = state.documents.reduce((acc, d) => acc + (d.fileSize || 0), 0);
+        $('kpiTotalStorage').textContent = formatSize(totalBytes);
+    }
 
     state.documents.forEach((document) => {
         rows.appendChild(renderDocumentRow(document));
@@ -330,7 +386,7 @@ function renderDocumentRow(document) {
 
     if (!isAdminRole) {
         const download = element('a', {
-            className: 'button small',
+            className: 'button small primary',
             text: 'Download',
             onClick: (event) => {
                 event.preventDefault();
@@ -344,7 +400,7 @@ function renderDocumentRow(document) {
     if ((isOwnerRole && isDocOwner) || isAdminRole) {
         actions.appendChild(element('button', {
             text: isAdminRole ? 'Manage' : 'Share',
-            className: 'small ghost',
+            className: 'button small ghost',
             onClick: () => openShare(document)
         }));
     }
@@ -352,7 +408,7 @@ function renderDocumentRow(document) {
     if (canEdit && !isAdminRole) {
         actions.appendChild(element('button', {
             text: 'Rename',
-            className: 'small ghost',
+            className: 'button small ghost',
             onClick: () => renameDocument(document)
         }));
     }
@@ -360,15 +416,33 @@ function renderDocumentRow(document) {
     if (isDocOwner && isOwnerRole) {
         actions.appendChild(element('button', {
             text: 'Delete',
-            className: 'small danger',
+            className: 'button small danger',
             onClick: () => deleteDocument(document)
         }));
     }
 
+    const docNameCell = element('td', {
+        children: [
+            element('strong', {
+                text: document.fileName,
+                className: 'doc-filename'
+            })
+        ]
+    });
+
+    const categoryCell = element('td', {
+        children: [
+            element('span', {
+                className: 'badge',
+                text: document.category
+            })
+        ]
+    });
+
     return element('tr', {
         children: [
-            element('td', { text: document.fileName }),
-            element('td', { text: document.category }),
+            docNameCell,
+            categoryCell,
             element('td', { text: document.ownerEmail }),
             element('td', { text: formatSize(document.fileSize) }),
             element('td', { text: formatDate(document.uploadedAt) }),
@@ -551,7 +625,7 @@ async function loadGrants() {
         grants.forEach((grant) => {
             const revoke = element('button', {
                 text: isAdmin ? 'Remove person' : 'Revoke',
-                className: 'small danger',
+                className: 'button small danger',
                 onClick: async () => {
                     try {
                         await request('/api/permissions/revoke/'
@@ -632,7 +706,7 @@ async function loadRestrictions() {
         restrictions.forEach((restriction) => {
             const removeBtn = element('button', {
                 text: 'Lift restriction',
-                className: 'small ghost',
+                className: 'button small ghost',
                 onClick: async () => {
                     try {
                         await request('/api/admin/restrictions/'
@@ -733,35 +807,52 @@ function renderAudit(entries) {
         rows.appendChild(element('tr', {
             children: [element('td', {
                 text: 'No entries match these filters.',
-                className: 'muted'
+                className: 'muted',
+                colSpan: 8
             })]
         }));
         return;
     }
 
     entries.forEach((entry) => {
+        const idCell = element('td', {
+            children: [element('code', { text: '#' + entry.id })]
+        });
+
+        const actionCell = element('td', {
+            children: [element('span', {
+                className: 'badge',
+                text: entry.action
+            })]
+        });
+
+        const outcomeBadge = element('span', {
+            className: 'badge ' + (entry.outcome || '').toLowerCase(),
+            text: entry.outcome
+        });
+
+        const ipCell = element('td', {
+            children: entry.ipAddress
+                ? [element('code', { text: entry.ipAddress })]
+                : [element('span', { text: '—', className: 'muted' })]
+        });
+
         rows.appendChild(element('tr', {
             children: [
-                element('td', { text: String(entry.id) }),
+                idCell,
                 element('td', { text: formatDate(entry.createdAt) }),
                 element('td', {
                     text: entry.actorEmail
                         || (entry.actorUserId ? '#' + entry.actorUserId : 'unknown')
                 }),
-                element('td', { text: entry.action }),
-                element('td', {
-                    children: [element('span', {
-                        className: 'badge '
-                            + (entry.outcome || '').toLowerCase(),
-                        text: entry.outcome
-                    })]
-                }),
+                actionCell,
+                element('td', { children: [outcomeBadge] }),
                 element('td', {
                     text: entry.documentName
-                        || (entry.documentId ? '#' + entry.documentId : '')
+                        || (entry.documentId ? '#' + entry.documentId : '—')
                 }),
-                element('td', { text: entry.details || '' }),
-                element('td', { text: entry.ipAddress || '' })
+                element('td', { text: entry.details || '—' }),
+                ipCell
             ]
         }));
     });
@@ -771,7 +862,9 @@ async function verifyChain() {
     try {
         const result = await request('/api/admin/audit/verify');
 
-        $('verifyResult').textContent = result.message;
+        const badge = $('verifyResult');
+        badge.textContent = result.message;
+        badge.className = 'verify-result-badge ' + (result.valid ? 'valid' : 'invalid');
 
         toast(result.valid
             ? 'Chain verified across ' + result.checkedEntries + ' entries'
@@ -817,7 +910,7 @@ function renderPersonRow(user) {
 
     const reset = element('button', {
         text: 'Issue temp password',
-        className: 'small ghost',
+        className: 'button small ghost',
         onClick: () => resetPassword(user)
     });
     reset.disabled = isSelf;
