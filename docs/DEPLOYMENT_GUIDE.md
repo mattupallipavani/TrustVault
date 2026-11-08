@@ -52,7 +52,8 @@ TrustVault uses a secure, hardened multi-stage `Dockerfile`:
 - Creates an unprivileged non-root user and group: `trustvault:trustvault` (UID/GID `10001`).
 - Pre-creates `/app/trustvault-storage` and `/data` with ownership `10001:10001`.
 - Sets standard `/tmp` directory (`-Djava.io.tmpdir=/tmp`) for Tomcat temporary multipart uploads.
-- Exposes port `8080` (or binds to Render's dynamic `$PORT`).
+- Exposes ports `10000` (Render default) and `8080` (Docker default) with explicit `0.0.0.0` IPv4 network binding.
+- Sets optimized memory limits (`-XX:MaxRAMPercentage=50.0 -XX:MaxMetaspaceSize=112m -Xss256k -Djava.net.preferIPv4Stack=true`) to guarantee stable operation within Render's 512 MB Free Tier cgroup limits.
 
 ---
 
@@ -83,7 +84,7 @@ Under the **Environment** tab of your Render Web Service, enter the following en
 
 | Key | Value / Example | Notes |
 | :--- | :--- | :--- |
-| `DB_URL` | `jdbc:postgresql://your-neon-host:5432/neondb?sslmode=require` | JDBC URL for Neon |
+| `DB_URL` | `jdbc:postgresql://your-neon-host:5432/neondb?sslmode=require` (or raw `postgres://...`) | Accepts JDBC URL or cloud URI format |
 | `DB_USERNAME` | `neondb_owner` | Neon database username |
 | `DB_PASSWORD` | `your_neon_secret_password` | Neon database password |
 | `STORAGE_TYPE` | `local` (or `supabase`) | Storage provider |
@@ -125,3 +126,19 @@ If you want files to persist across Render container restarts on a ₹0 budget:
 - [ ] **Upload Test**: Sign in as `owner@trustvault.local`, upload a test PDF, and verify SHA-256 fingerprinting.
 - [ ] **Sharing Test**: Share the document with `viewer@trustvault.local`, log in as Viewer, and verify download.
 - [ ] **Restriction Test**: As Admin, apply a sharing restriction on the Owner for that document, and verify the Owner cannot grant access to new users.
+
+---
+
+## 6. Troubleshooting Cloud Deployments
+
+### Port Scan Timeout Reached (`Timed Out`)
+If Render reports `Port scan timeout reached, no open ports detected`:
+1. **Ensure Port 10000 Alignment**: Verify `render.yaml` sets `PORT=10000`. The container exposes both `10000` and `8080`, and Spring Boot binds to `0.0.0.0:${PORT:10000}`.
+2. **Verify Database Credentials**: Check the Render **Logs** tab. If the database connection fails on startup, the application exits before binding to any port. Ensure `DB_URL` (or `DATABASE_URL`), `DB_USERNAME`, and `DB_PASSWORD` are filled in the Render Environment tab.
+3. **Out-of-Memory (OOM) Termination**: Render's free tier has a 512 MB memory boundary. The JVM arguments are tuned (`-Xss256k -XX:MaxRAMPercentage=50.0 -XX:MaxMetaspaceSize=112m`) to run within this envelope.
+
+### Database Connection Refused / SSL Required
+If the logs show `FATAL: no pg_hba.conf entry for host ... no encryption`:
+* Cloud databases (Neon, Render PostgreSQL) mandate encrypted connections.
+* TrustVault's `DatabaseUrlEnvironmentPostProcessor` automatically appends `sslmode=require` for all remote hosts. If overriding manually, ensure `?sslmode=require` is present at the end of `DB_URL`.
+
