@@ -37,7 +37,7 @@ USER trustvault:trustvault
 
 ENV STORAGE_LOCATION=/data \
     SESSION_COOKIE_SECURE=true \
-    JAVA_OPTS="-XX:MaxRAMPercentage=50.0 -XX:+UseSerialGC -Xss256k -XX:MetaspaceSize=96m -XX:MaxMetaspaceSize=112m -Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -Djava.io.tmpdir=/tmp"
+    JAVA_OPTS="-XX:MaxRAMPercentage=45.0 -XX:+UseSerialGC -Xss256k -XX:MetaspaceSize=128m -Djava.net.preferIPv4Stack=true -Djava.security.egd=file:/dev/./urandom -Djava.io.tmpdir=/tmp"
 
 EXPOSE 10000 8080
 

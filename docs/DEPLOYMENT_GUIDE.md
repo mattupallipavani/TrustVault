@@ -53,7 +53,7 @@ TrustVault uses a secure, hardened multi-stage `Dockerfile`:
 - Pre-creates `/app/trustvault-storage` and `/data` with ownership `10001:10001`.
 - Sets standard `/tmp` directory (`-Djava.io.tmpdir=/tmp`) for Tomcat temporary multipart uploads.
 - Exposes ports `10000` (Render default) and `8080` (Docker default) with explicit `0.0.0.0` IPv4 network binding.
-- Sets optimized memory limits (`-XX:MaxRAMPercentage=50.0 -XX:MaxMetaspaceSize=112m -Xss256k -Djava.net.preferIPv4Stack=true`) to guarantee stable operation within Render's 512 MB Free Tier cgroup limits.
+- Sets optimized memory limits (`-XX:MaxRAMPercentage=45.0 -XX:MetaspaceSize=128m -Xss256k -Djava.net.preferIPv4Stack=true`) to guarantee stable operation within Render's 512 MB Free Tier cgroup limits without artificial Metaspace throttling.
 
 ---
 
@@ -135,7 +135,7 @@ If you want files to persist across Render container restarts on a ₹0 budget:
 If Render reports `Port scan timeout reached, no open ports detected`:
 1. **Ensure Port 10000 Alignment**: Verify `render.yaml` sets `PORT=10000`. The container exposes both `10000` and `8080`, and Spring Boot binds to `0.0.0.0:${PORT:10000}`.
 2. **Verify Database Credentials**: Check the Render **Logs** tab. If the database connection fails on startup, the application exits before binding to any port. Ensure `DB_URL` (or `DATABASE_URL`), `DB_USERNAME`, and `DB_PASSWORD` are filled in the Render Environment tab.
-3. **Out-of-Memory (OOM) Termination**: Render's free tier has a 512 MB memory boundary. The JVM arguments are tuned (`-Xss256k -XX:MaxRAMPercentage=50.0 -XX:MaxMetaspaceSize=112m`) to run within this envelope.
+3. **Out-of-Memory (OOM) / Metaspace**: Render's free tier has a 512 MB memory boundary. The JVM arguments are tuned (`-Xss256k -XX:MaxRAMPercentage=45.0 -XX:MetaspaceSize=128m`) to ensure total process memory stays well below 512 MB while leaving Metaspace unconstrained so Hibernate SQM class generation can complete without throwing `OutOfMemoryError: Metaspace`.
 
 ### Database Connection Refused / SSL Required
 If the logs show `FATAL: no pg_hba.conf entry for host ... no encryption`:
