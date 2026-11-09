@@ -5,6 +5,27 @@
 
 [Visit TrustVault – Live Application](https://trustvault-production-0633.up.railway.app)
 
+# TrustVault – Project Documentation
+
+**Project Name:** TrustVault
+
+**Project Type:** Secure Document Management System
+
+## Documentation
+
+Click the link below to view the complete project documentation.
+
+[View Project Documentation](https://drive.google.com/file/d/1F7-7va4HeWcKx4_HGcnTQsI5gDQ8Pe9a/view?usp=sharing)
+
+# TrustVault – Project Demo
+
+## YouTube Demo Video
+
+Watch the complete project demonstration here:
+
+[Watch TrustVault Demo](https://youtu.be/d1UjwWOyuhI)
+
+This video demonstrates the main features and working of the TrustVault application.
 
 [![Build Status](https://img.shields.io/badge/Build-Passing-emerald?style=for-the-badge&logo=githubactions)](https://github.com/mattupallipavani/TrustVault)
 [![Java 21 LTS](https://img.shields.io/badge/Java-21%20LTS-blue?style=for-the-badge&logo=openjdk)](https://openjdk.org/projects/jdk/21/)
