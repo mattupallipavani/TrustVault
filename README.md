@@ -1,4 +1,10 @@
 # TrustVault – Secure Enterprise Document Management & Sharing System
+## 🚀 Live Demo
+
+**Try TrustVault here:**
+
+[Visit TrustVault – Live Application](https://trustvault-production-0633.up.railway.app)
+
 
 [![Build Status](https://img.shields.io/badge/Build-Passing-emerald?style=for-the-badge&logo=githubactions)](https://github.com/mattupallipavani/TrustVault)
 [![Java 21 LTS](https://img.shields.io/badge/Java-21%20LTS-blue?style=for-the-badge&logo=openjdk)](https://openjdk.org/projects/jdk/21/)
